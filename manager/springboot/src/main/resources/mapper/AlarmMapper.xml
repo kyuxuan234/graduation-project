@@ -1,0 +1,122 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.mapper.AlarmMapper">
+
+    <sql id="Base_Column_List">
+        al.id,al.alarm_no,al.app_id,al.server_id,al.`level`,al.content,al.status,al.handler,
+        al.handle_time,al.resolve_time,al.create_time,al.update_time,al.deleted
+    </sql>
+
+    <!-- 联查字段：应用名、服务器主机名 -->
+    <sql id="Join_Column_List">
+        a.name as app_name, s.hostname as server_name
+    </sql>
+
+    <sql id="Join_Table">
+        from alarm al
+        left join app a on al.app_id = a.id and a.deleted = 0
+        left join server s on al.server_id = s.id and s.deleted = 0
+    </sql>
+
+    <select id="selectAll" resultType="com.example.entity.Alarm">
+        select
+        <include refid="Base_Column_List" />,
+        <include refid="Join_Column_List" />,
+        coalesce(
+            (select 'ADMIN' from admin x where x.username = al.handler or x.name = al.handler limit 1),
+            (select 'DEV' from dev x where x.deleted = 0 and (x.username = al.handler or x.name = al.handler) limit 1),
+            (select 'OPS' from ops x where x.deleted = 0 and (x.username = al.handler or x.name = al.handler) limit 1)
+        ) as handler_role
+        <include refid="Join_Table" />
+        <where>
+            al.deleted = 0
+            <if test="id != null"> and al.id= #{id}</if>
+            <if test="alarmNo != null"> and al.alarm_no like concat('%', #{alarmNo}, '%')</if>
+            <if test="level != null"> and al.`level`= #{level}</if>
+            <if test="status != null"> and al.status= #{status}</if>
+            <if test="appId != null"> and al.app_id= #{appId}</if>
+            <if test="serverId != null"> and al.server_id= #{serverId}</if>
+            <if test="handler != null"> and al.handler like concat('%', #{handler}, '%')</if>
+            <if test="startTime != null"> and al.create_time &gt;= #{startTime}</if>
+            <if test="endTime != null"> and al.create_time &lt;= #{endTime}</if>
+        </where>
+        order by al.id desc
+    </select>
+
+    <select id="selectById" resultType="com.example.entity.Alarm">
+        select
+        <include refid="Base_Column_List" />,
+        <include refid="Join_Column_List" />
+        <include refid="Join_Table" />
+        where al.id = #{id} and al.deleted = 0
+    </select>
+
+    <update id="deleteById">
+        update alarm
+        set deleted = 1
+        where id = #{id}
+    </update>
+
+    <insert id="insert" parameterType="com.example.entity.Alarm" useGeneratedKeys="true" keyProperty="id">
+        insert into alarm
+        <trim prefix="(" suffix=")" suffixOverrides=",">
+                <if test="alarmNo != null">alarm_no,</if>
+                <if test="appId != null">app_id,</if>
+                <if test="serverId != null">server_id,</if>
+                <if test="level != null">`level`,</if>
+                <if test="content != null">content,</if>
+                <if test="status != null">status,</if>
+                <if test="handler != null">handler,</if>
+                <if test="handleTime != null">handle_time,</if>
+                <if test="resolveTime != null">resolve_time,</if>
+        </trim>
+        <trim prefix="values (" suffix=")" suffixOverrides=",">
+                <if test="alarmNo != null">#{alarmNo},</if>
+                <if test="appId != null">#{appId},</if>
+                <if test="serverId != null">#{serverId},</if>
+                <if test="level != null">#{level},</if>
+                <if test="content != null">#{content},</if>
+                <if test="status != null">#{status},</if>
+                <if test="handler != null">#{handler},</if>
+                <if test="handleTime != null">#{handleTime},</if>
+                <if test="resolveTime != null">#{resolveTime},</if>
+        </trim>
+    </insert>
+
+    <update id="updateById" parameterType="com.example.entity.Alarm">
+        update alarm
+        <set>
+            <if test="alarmNo != null">
+                alarm_no = #{alarmNo},
+            </if>
+            <if test="appId != null">
+                app_id = #{appId},
+            </if>
+            <if test="serverId != null">
+                server_id = #{serverId},
+            </if>
+            <if test="level != null">
+                `level` = #{level},
+            </if>
+            <if test="content != null">
+                content = #{content},
+            </if>
+            <if test="status != null">
+                status = #{status},
+            </if>
+            <if test="handler != null">
+                handler = #{handler},
+            </if>
+            <if test="handleTime != null">
+                handle_time = #{handleTime},
+            </if>
+            <if test="resolveTime != null">
+                resolve_time = #{resolveTime},
+            </if>
+        </set>
+        where id = #{id}
+    </update>
+
+</mapper>

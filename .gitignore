@@ -1,0 +1,46 @@
+# Vue / Node
+node_modules/
+dist/
+.cache/
+*.local
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Maven / Java / Spring Boot
+target/
+*.class
+*.jar
+*.war
+*.ear
+hs_err_pid*
+replay_pid*
+
+# Runtime uploads
+/files/
+
+# Logs & temp
+*.log
+*.tmp
+*.temp
+.temp/
+tmp/
+
+# IDE
+.idea/
+*.iml
+*.ipr
+*.iws
+.project
+.classpath
+.settings/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+
+# OS
+.DS_Store
+Thumbs.db
+Desktop.ini
+ehthumbs.db

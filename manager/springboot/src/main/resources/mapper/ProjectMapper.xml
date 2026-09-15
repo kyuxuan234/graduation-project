@@ -1,0 +1,108 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.mapper.ProjectMapper">
+
+    <sql id="Base_Column_List">
+        id,name,code,tech_stack,leader,status,start_date,end_date,description,create_time,update_time,deleted
+    </sql>
+
+    <select id="selectAll" resultType="com.example.entity.Project">
+        select
+        <include refid="Base_Column_List" />,
+        (select count(*) from app a where a.project_id = project.id and a.deleted = 0) as app_count,
+        coalesce(
+            (select 'ADMIN' from admin x where x.username = project.leader or x.name = project.leader limit 1),
+            (select 'DEV' from dev x where x.deleted = 0 and (x.username = project.leader or x.name = project.leader) limit 1),
+            (select 'OPS' from ops x where x.deleted = 0 and (x.username = project.leader or x.name = project.leader) limit 1)
+        ) as leader_role
+        from project
+        <where>
+            deleted = 0
+            <if test="id != null"> and id= #{id}</if>
+            <if test="name != null"> and name like concat('%', #{name}, '%')</if>
+            <if test="code != null"> and code= #{code}</if>
+            <if test="status != null"> and status= #{status}</if>
+            <if test="leader != null"> and leader like concat('%', #{leader}, '%')</if>
+            <if test="techStack != null"> and tech_stack like concat('%', #{techStack}, '%')</if>
+        </where>
+        order by id desc
+    </select>
+
+    <select id="selectById" resultType="com.example.entity.Project">
+        select
+        <include refid="Base_Column_List" />
+        from project
+        where id = #{id} and deleted = 0
+    </select>
+
+    <select id="selectByCode" resultType="com.example.entity.Project">
+        select
+        <include refid="Base_Column_List" />
+        from project
+        where code = #{code} and deleted = 0
+    </select>
+
+    <update id="deleteById">
+        update project
+        set deleted = 1
+        where id = #{id}
+    </update>
+
+    <insert id="insert" parameterType="com.example.entity.Project" useGeneratedKeys="true" keyProperty="id">
+        insert into project
+        <trim prefix="(" suffix=")" suffixOverrides=",">
+                <if test="name != null">name,</if>
+                <if test="code != null">code,</if>
+                <if test="techStack != null">tech_stack,</if>
+                <if test="leader != null">leader,</if>
+                <if test="status != null">status,</if>
+                <if test="startDate != null">start_date,</if>
+                <if test="endDate != null">end_date,</if>
+                <if test="description != null">description,</if>
+        </trim>
+        <trim prefix="values (" suffix=")" suffixOverrides=",">
+                <if test="name != null">#{name},</if>
+                <if test="code != null">#{code},</if>
+                <if test="techStack != null">#{techStack},</if>
+                <if test="leader != null">#{leader},</if>
+                <if test="status != null">#{status},</if>
+                <if test="startDate != null">#{startDate},</if>
+                <if test="endDate != null">#{endDate},</if>
+                <if test="description != null">#{description},</if>
+        </trim>
+    </insert>
+
+    <update id="updateById" parameterType="com.example.entity.Project">
+        update project
+        <set>
+            <if test="name != null">
+                name = #{name},
+            </if>
+            <if test="code != null">
+                code = #{code},
+            </if>
+            <if test="techStack != null">
+                tech_stack = #{techStack},
+            </if>
+            <if test="leader != null">
+                leader = #{leader},
+            </if>
+            <if test="status != null">
+                status = #{status},
+            </if>
+            <if test="startDate != null">
+                start_date = #{startDate},
+            </if>
+            <if test="endDate != null">
+                end_date = #{endDate},
+            </if>
+            <if test="description != null">
+                description = #{description},
+            </if>
+        </set>
+        where id = #{id}
+    </update>
+
+</mapper>

@@ -1,0 +1,117 @@
+package com.example.service;
+
+import cn.hutool.core.util.ObjectUtil;
+import com.example.common.enums.ResultCodeEnum;
+import com.example.common.enums.ServerStatusEnum;
+import com.example.entity.Server;
+import com.example.exception.BusinessException;
+import com.example.mapper.AppMapper;
+import com.example.mapper.ServerMapper;
+import com.github.pagehelper.PageHelper;
+import com.github.pagehelper.PageInfo;
+import org.springframework.stereotype.Service;
+
+import javax.annotation.Resource;
+import java.util.List;
+
+/**
+ * 服务器业务处理
+ **/
+@Service
+public class ServerService {
+
+    @Resource
+    private ServerMapper serverMapper;
+
+    @Resource
+    private AppMapper appMapper;
+
+    /**
+     * 新增
+     */
+    public void add(Server server) {
+        checkUnique(server, null);
+        if (ObjectUtil.isEmpty(server.getStatus())) {
+            server.setStatus(ServerStatusEnum.RUNNING.name());
+        }
+        serverMapper.insert(server);
+    }
+
+    /**
+     * 删除
+     */
+    public void deleteById(Integer id) {
+        Server dbServer = serverMapper.selectById(id);
+        if (ObjectUtil.isNull(dbServer)) {
+            throw new BusinessException(ResultCodeEnum.SERVER_NOT_EXIST_ERROR);
+        }
+        if (ServerStatusEnum.STOPPED.name().equals(dbServer.getStatus())
+                || ServerStatusEnum.MAINTENANCE.name().equals(dbServer.getStatus())) {
+            throw new BusinessException(ResultCodeEnum.STATUS_LOCKED_ERROR);
+        }
+        // 该服务器下仍有应用时不允许删除
+        if (appMapper.countByServerId(id) > 0) {
+            throw new BusinessException(ResultCodeEnum.SERVER_HAS_APPS);
+        }
+        serverMapper.deleteById(id);
+    }
+
+    /**
+     * 批量删除
+     */
+    public void deleteBatch(List<Integer> ids) {
+        for (Integer id : ids) {
+            deleteById(id);
+        }
+    }
+
+    /**
+     * 修改
+     */
+    public void updateById(Server server) {
+        checkUnique(server, server.getId());
+        serverMapper.updateById(server);
+    }
+
+    /**
+     * 主机名与IP唯一性校验，excludeId 为本次修改的记录id
+     */
+    private void checkUnique(Server server, Integer excludeId) {
+        if (ObjectUtil.isNotEmpty(server.getHostname())) {
+            Server dbServer = serverMapper.selectByHostname(server.getHostname());
+            if (ObjectUtil.isNotNull(dbServer) && !dbServer.getId().equals(excludeId)) {
+                throw new BusinessException(ResultCodeEnum.SERVER_HOSTNAME_EXIST_ERROR);
+            }
+        }
+        if (ObjectUtil.isNotEmpty(server.getIp())) {
+            Server dbServer = serverMapper.selectByIp(server.getIp());
+            if (ObjectUtil.isNotNull(dbServer) && !dbServer.getId().equals(excludeId)) {
+                throw new BusinessException(ResultCodeEnum.SERVER_IP_EXIST_ERROR);
+            }
+        }
+    }
+
+    /**
+     * 根据ID查询
+     */
+    public Server selectById(Integer id) {
+        return serverMapper.selectById(id);
+    }
+
+    /**
+     * 查询所有未停机的服务器，给前端下拉框用
+     */
+    public List<Server> selectAll() {
+        return serverMapper.selectNotStopped();
+    }
+
+    /**
+     * 分页查询
+     */
+    public PageInfo<Server> selectPage(Server server, Integer pageNum, Integer pageSize) {
+        PageHelper.startPage(pageNum, pageSize);
+        List<Server> list = serverMapper.selectAll(server);
+        return PageInfo.of(list);
+    }
+
+}

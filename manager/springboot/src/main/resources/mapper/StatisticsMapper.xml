@@ -1,0 +1,87 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.mapper.StatisticsMapper">
+
+    <select id="countProject" resultType="java.lang.Integer">
+        select count(*) from project where deleted = 0
+    </select>
+
+    <select id="countServer" resultType="java.lang.Integer">
+        select count(*) from server where deleted = 0
+    </select>
+
+    <select id="countApp" resultType="java.lang.Integer">
+        select count(*) from app where deleted = 0
+    </select>
+
+    <select id="countOnlineApp" resultType="java.lang.Integer">
+        select count(*) from app where deleted = 0 and status = 'ONLINE'
+    </select>
+
+    <select id="countDeploy" resultType="java.lang.Integer">
+        select count(*) from deploy where deleted = 0
+    </select>
+
+    <select id="countPendingDeploy" resultType="java.lang.Integer">
+        select count(*) from deploy where deleted = 0 and status = 'PENDING'
+    </select>
+
+    <select id="countUnhandledAlarm" resultType="java.lang.Integer">
+        select count(*) from alarm where deleted = 0 and status = 'UNHANDLED'
+    </select>
+
+    <select id="countDeployGroupByDate" resultType="java.util.Map">
+        select date_format(apply_time, '%Y-%m-%d') as `date`, count(*) as `count`
+        from deploy
+        where deleted = 0
+          and apply_time is not null
+          and apply_time &gt;= #{startDate}
+        group by date_format(apply_time, '%Y-%m-%d')
+        order by `date`
+    </select>
+
+    <select id="countAlarmGroupByLevel" resultType="java.util.Map">
+        select al.`level` as `level`, count(*) as `count`
+        from alarm al
+        where al.deleted = 0
+        group by al.`level`
+    </select>
+
+    <select id="countServerGroupByEnv" resultType="java.util.Map">
+        select env as `env`, count(*) as `count`
+        from server
+        where deleted = 0
+        group by env
+    </select>
+
+    <select id="countDeployGroupByStatus" resultType="java.util.Map">
+        select status as `status`, count(*) as `count`
+        from deploy
+        where deleted = 0
+        group by status
+    </select>
+
+    <select id="countAlarmGroupByStatus" resultType="java.util.Map">
+        select status as `status`, count(*) as `count`
+        from alarm
+        where deleted = 0
+        group by status
+    </select>
+
+    <select id="countAppDeployAndAlarm" resultType="java.util.Map">
+        select a.id as `id`,
+               a.name as `name`,
+               (select count(*) from deploy d where d.app_id = a.id and d.deleted = 0) as `deployCount`,
+               (select count(*) from alarm al where al.app_id = a.id and al.deleted = 0) as `alarmCount`,
+               (select count(*) from alarm al where al.app_id = a.id and al.deleted = 0 and al.status in ('UNHANDLED', 'HANDLING')) as `openAlarmCount`,
+               (select count(*) from alarm al where al.app_id = a.id and al.deleted = 0 and al.status in ('UNHANDLED', 'HANDLING') and al.`level` = 'CRITICAL') as `criticalOpenCount`,
+               (select count(*) from deploy d where d.app_id = a.id and d.deleted = 0 and d.status = 'FAILED') as `failedDeployCount`
+        from app a
+        where a.deleted = 0
+        order by `openAlarmCount` desc, `criticalOpenCount` desc, `alarmCount` desc, `deployCount` desc
+        limit 8
+    </select>
+
+</mapper>

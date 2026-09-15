@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.mapper.DeployLogMapper">
+
+    <sql id="Base_Column_List">
+        id,deploy_id,action,operator,detail,create_time,update_time,deleted
+    </sql>
+
+    <select id="selectAll" resultType="com.example.entity.DeployLog">
+        select
+        <include refid="Base_Column_List" />
+        from deploy_log
+        <where>
+            deleted = 0
+            <if test="id != null"> and id= #{id}</if>
+            <if test="deployId != null"> and deploy_id= #{deployId}</if>
+            <if test="action != null"> and action= #{action}</if>
+            <if test="operator != null"> and operator like concat('%', #{operator}, '%')</if>
+        </where>
+        order by id desc
+    </select>
+
+    <select id="selectById" resultType="com.example.entity.DeployLog">
+        select
+        <include refid="Base_Column_List" />
+        from deploy_log
+        where id = #{id} and deleted = 0
+    </select>
+
+    <insert id="insert" parameterType="com.example.entity.DeployLog" useGeneratedKeys="true" keyProperty="id">
+        insert into deploy_log
+        <trim prefix="(" suffix=")" suffixOverrides=",">
+                <if test="deployId != null">deploy_id,</if>
+                <if test="action != null">action,</if>
+                <if test="operator != null">operator,</if>
+                <if test="detail != null">detail,</if>
+        </trim>
+        <trim prefix="values (" suffix=")" suffixOverrides=",">
+                <if test="deployId != null">#{deployId},</if>
+                <if test="action != null">#{action},</if>
+                <if test="operator != null">#{operator},</if>
+                <if test="detail != null">#{detail},</if>
+        </trim>
+    </insert>
+
+</mapper>

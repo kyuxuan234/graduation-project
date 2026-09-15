@@ -1,0 +1,152 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.mapper.DeployMapper">
+
+    <sql id="Base_Column_List">
+        d.id,d.deploy_no,d.app_id,d.server_id,d.version,d.deploy_type,d.status,d.applicant,d.approver,
+        d.apply_time,d.approve_time,d.finish_time,d.reason,d.remark,d.create_time,d.update_time,d.deleted
+    </sql>
+
+    <!-- 联查字段：应用名、应用编号、服务器主机名 -->
+    <sql id="Join_Column_List">
+        a.name as app_name, a.code as app_code, s.hostname as server_name
+    </sql>
+
+    <sql id="Join_Table">
+        from deploy d
+        left join app a on d.app_id = a.id and a.deleted = 0
+        left join server s on d.server_id = s.id and s.deleted = 0
+    </sql>
+
+    <select id="selectAll" resultType="com.example.entity.Deploy">
+        select
+        <include refid="Base_Column_List" />,
+        <include refid="Join_Column_List" />,
+        coalesce(
+            (select 'ADMIN' from admin x where x.username = d.applicant or x.name = d.applicant limit 1),
+            (select 'DEV' from dev x where x.deleted = 0 and (x.username = d.applicant or x.name = d.applicant) limit 1),
+            (select 'OPS' from ops x where x.deleted = 0 and (x.username = d.applicant or x.name = d.applicant) limit 1)
+        ) as applicant_role,
+        coalesce(
+            (select 'ADMIN' from admin x where x.username = d.approver or x.name = d.approver limit 1),
+            (select 'DEV' from dev x where x.deleted = 0 and (x.username = d.approver or x.name = d.approver) limit 1),
+            (select 'OPS' from ops x where x.deleted = 0 and (x.username = d.approver or x.name = d.approver) limit 1)
+        ) as approver_role
+        <include refid="Join_Table" />
+        <where>
+            d.deleted = 0
+            <if test="id != null"> and d.id= #{id}</if>
+            <if test="deployNo != null"> and d.deploy_no like concat('%', #{deployNo}, '%')</if>
+            <if test="status != null"> and d.status= #{status}</if>
+            <if test="appId != null"> and d.app_id= #{appId}</if>
+            <if test="serverId != null"> and d.server_id= #{serverId}</if>
+            <if test="deployType != null"> and d.deploy_type= #{deployType}</if>
+            <if test="applicant != null"> and d.applicant like concat('%', #{applicant}, '%')</if>
+            <if test="approver != null"> and d.approver like concat('%', #{approver}, '%')</if>
+            <if test="startTime != null"> and d.apply_time &gt;= #{startTime}</if>
+            <if test="endTime != null"> and d.apply_time &lt;= #{endTime}</if>
+        </where>
+        order by d.id desc
+    </select>
+
+    <select id="selectById" resultType="com.example.entity.Deploy">
+        select
+        <include refid="Base_Column_List" />,
+        <include refid="Join_Column_List" />
+        <include refid="Join_Table" />
+        where d.id = #{id} and d.deleted = 0
+    </select>
+
+    <select id="countByAppId" resultType="java.lang.Integer">
+        select count(*) from deploy where app_id = #{appId} and deleted = 0
+    </select>
+
+    <update id="deleteById">
+        update deploy
+        set deleted = 1
+        where id = #{id}
+    </update>
+
+    <insert id="insert" parameterType="com.example.entity.Deploy" useGeneratedKeys="true" keyProperty="id">
+        insert into deploy
+        <trim prefix="(" suffix=")" suffixOverrides=",">
+                <if test="deployNo != null">deploy_no,</if>
+                <if test="appId != null">app_id,</if>
+                <if test="serverId != null">server_id,</if>
+                <if test="version != null">version,</if>
+                <if test="deployType != null">deploy_type,</if>
+                <if test="status != null">status,</if>
+                <if test="applicant != null">applicant,</if>
+                <if test="approver != null">approver,</if>
+                <if test="applyTime != null">apply_time,</if>
+                <if test="approveTime != null">approve_time,</if>
+                <if test="finishTime != null">finish_time,</if>
+                <if test="reason != null">reason,</if>
+                <if test="remark != null">remark,</if>
+        </trim>
+        <trim prefix="values (" suffix=")" suffixOverrides=",">
+                <if test="deployNo != null">#{deployNo},</if>
+                <if test="appId != null">#{appId},</if>
+                <if test="serverId != null">#{serverId},</if>
+                <if test="version != null">#{version},</if>
+                <if test="deployType != null">#{deployType},</if>
+                <if test="status != null">#{status},</if>
+                <if test="applicant != null">#{applicant},</if>
+                <if test="approver != null">#{approver},</if>
+                <if test="applyTime != null">#{applyTime},</if>
+                <if test="approveTime != null">#{approveTime},</if>
+                <if test="finishTime != null">#{finishTime},</if>
+                <if test="reason != null">#{reason},</if>
+                <if test="remark != null">#{remark},</if>
+        </trim>
+    </insert>
+
+    <update id="updateById" parameterType="com.example.entity.Deploy">
+        update deploy
+        <set>
+            <if test="deployNo != null">
+                deploy_no = #{deployNo},
+            </if>
+            <if test="appId != null">
+                app_id = #{appId},
+            </if>
+            <if test="serverId != null">
+                server_id = #{serverId},
+            </if>
+            <if test="version != null">
+                version = #{version},
+            </if>
+            <if test="deployType != null">
+                deploy_type = #{deployType},
+            </if>
+            <if test="status != null">
+                status = #{status},
+            </if>
+            <if test="applicant != null">
+                applicant = #{applicant},
+            </if>
+            <if test="approver != null">
+                approver = #{approver},
+            </if>
+            <if test="applyTime != null">
+                apply_time = #{applyTime},
+            </if>
+            <if test="approveTime != null">
+                approve_time = #{approveTime},
+            </if>
+            <if test="finishTime != null">
+                finish_time = #{finishTime},
+            </if>
+            <if test="reason != null">
+                reason = #{reason},
+            </if>
+            <if test="remark != null">
+                remark = #{remark},
+            </if>
+        </set>
+        where id = #{id}
+    </update>
+
+</mapper>

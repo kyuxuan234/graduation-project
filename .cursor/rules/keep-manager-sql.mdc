@@ -1,0 +1,11 @@
+---
+description: Never delete graduation-project/manager.sql
+alwaysApply: true
+---
+
+# Keep manager.sql
+
+- Do not delete `graduation-project/manager.sql`.
+- Do not empty, overwrite, or replace it during cleanup, tightening, or “unused file” passes.
+- It is an early scaffold backup (admin / notice). Keep it as-is.
+- Fresh installs still use `schema.sql` + `data.sql`. Do not tell the user to run `manager.sql` to create the current schema (it DROP-s tables).

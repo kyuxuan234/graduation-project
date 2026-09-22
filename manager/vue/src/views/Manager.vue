@@ -32,7 +32,7 @@
         </el-dropdown>
         <el-dropdown placement="bottom">
           <div class="avatar">
-            <img :src="user.avatar || 'https://cube.elemecdn.com/3/7c/3ea6beec64369c2642b92c6726f1epng.png'" />
+            <img :src="avatarSrc" @error="useDefaultAvatar" />
             <div>{{ user.name || user.username }}（{{ roleName }}）</div>
           </div>
           <el-dropdown-menu slot="dropdown">
@@ -85,6 +85,7 @@
 <script>
 import { rememberPerson, rememberPersons } from '@/utils/person'
 import { buildInbox } from '@/utils/inbox'
+import { defaultAvatar, resolveAvatar } from '@/utils/avatar'
 
 // 全部菜单，roles 表示哪些角色可见
 const ALL_MENUS = [
@@ -133,9 +134,16 @@ export default {
       nowText: '',
       clockTimer: null,
       inboxItems: [],
+      avatarFailed: false,
     }
   },
   computed: {
+    avatarSrc() {
+      if (this.avatarFailed) {
+        return defaultAvatar
+      }
+      return resolveAvatar(this.user.avatar)
+    },
     isOps() {
       return this.$route.path === '/dashboard'
     },
@@ -199,6 +207,10 @@ export default {
     },
     updateUser() {
       this.user = JSON.parse(localStorage.getItem('xm-user') || '{}')   // 重新获取下用户的最新信息
+      this.avatarFailed = false
+    },
+    useDefaultAvatar() {
+      this.avatarFailed = true
     },
     loadInbox(notify) {
       if (!this.user.id || this.user.role === 'ADMIN') {

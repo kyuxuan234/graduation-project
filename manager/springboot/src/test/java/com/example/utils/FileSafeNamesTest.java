@@ -60,6 +60,23 @@ class FileSafeNamesTest {
     }
 
     @Test
+    void resolveAllowedExt_rejectsTraversalNullByteAndAcceptsPlainName() {
+        assertEquals(ResultCodeEnum.FILE_TYPE_ERROR.code,
+                assertThrows(BusinessException.class, () -> FileSafeNames.resolveAllowedExt("../a.png")).getCode());
+        assertEquals(ResultCodeEnum.FILE_TYPE_ERROR.code,
+                assertThrows(BusinessException.class, () -> FileSafeNames.resolveAllowedExt("..\\a.png")).getCode());
+        assertEquals(ResultCodeEnum.FILE_TYPE_ERROR.code,
+                assertThrows(BusinessException.class, () -> FileSafeNames.resolveAllowedExt("C:\\Windows\\x.txt")).getCode());
+        assertEquals(ResultCodeEnum.FILE_TYPE_ERROR.code,
+                assertThrows(BusinessException.class, () -> FileSafeNames.resolveAllowedExt("/etc/passwd")).getCode());
+        assertEquals(ResultCodeEnum.FILE_TYPE_ERROR.code,
+                assertThrows(BusinessException.class, () -> FileSafeNames.resolveAllowedExt("a%00.png")).getCode());
+        assertEquals(ResultCodeEnum.FILE_TYPE_ERROR.code,
+                assertThrows(BusinessException.class, () -> FileSafeNames.resolveAllowedExt("a\u0000.png")).getCode());
+        assertEquals("png", FileSafeNames.resolveAllowedExt("myapp-v1.2.0.png"));
+    }
+
+    @Test
     void resolveInside_staysInRoot() {
         Path root = Paths.get("files").toAbsolutePath();
         Path target = FileSafeNames.resolveInside(root, "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee.png");

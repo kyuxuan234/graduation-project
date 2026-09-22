@@ -31,7 +31,12 @@ public final class FileSafeNames {
      * 从原始文件名解析允许的存储后缀；.tar.gz 存为 gz（GET 标识后缀最长 5）。
      */
     public static String resolveAllowedExt(String originalName) {
-        if (StrUtil.isBlank(originalName) || originalName.contains("..") || originalName.contains("/") || originalName.contains("\\")) {
+        if (StrUtil.isBlank(originalName)
+                || originalName.indexOf('\0') >= 0
+                || originalName.toLowerCase(Locale.ROOT).contains("%00")
+                || originalName.contains("..")
+                || originalName.contains("/")
+                || originalName.contains("\\")) {
             throw new BusinessException(ResultCodeEnum.FILE_TYPE_ERROR);
         }
         String lower = originalName.toLowerCase(Locale.ROOT);

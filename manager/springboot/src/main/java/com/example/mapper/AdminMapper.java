@@ -1,6 +1,7 @@
 package com.example.mapper;
 
 import com.example.entity.Admin;
+import com.example.entity.PersonMailAddress;
 import org.apache.ibatis.annotations.Select;
 
 import java.util.List;
@@ -37,4 +38,9 @@ public interface AdminMapper {
 
     @Select("select * from admin where username = #{username}")
     Admin selectByUsername(String username);
+
+    /**
+     * 告警通知：未删除、未禁用、且填写了邮箱的管理员
+     */
+    List<PersonMailAddress> selectNotifyMails();
 }

@@ -27,12 +27,14 @@ public class AlarmService {
 
     @Resource
     private AlarmMapper alarmMapper;
+    @Resource
+    private AlarmMailService alarmMailService;
 
     /**
      * 新增
      */
     public void add(Alarm alarm) {
-        AuthUtils.requireRole(ResultCodeEnum.ALARM_HANDLE_NO_PERMISSION, RoleEnum.OPS);
+        Account currentUser = AuthUtils.requireRole(ResultCodeEnum.ALARM_HANDLE_NO_PERMISSION, RoleEnum.OPS);
         if (ObjectUtil.isEmpty(alarm.getAlarmNo())) {
             alarm.setAlarmNo(generateAlarmNo());
         }
@@ -41,6 +43,7 @@ public class AlarmService {
         alarm.setHandleTime(null);
         alarm.setResolveTime(null);
         alarmMapper.insert(alarm);
+        alarmMailService.notifyNewAlarm(alarm, currentUser);
     }
 
     /**

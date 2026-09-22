@@ -82,4 +82,13 @@
         where id = #{id}
     </update>
 
+    <select id="selectNotifyMails" resultType="com.example.entity.PersonMailAddress">
+        select username, name, email
+        from ops
+        where deleted = 0
+          and (status is null or status = 'ACTIVE')
+          and email is not null
+          and trim(email) like '%@%'
+    </select>
+
 </mapper>

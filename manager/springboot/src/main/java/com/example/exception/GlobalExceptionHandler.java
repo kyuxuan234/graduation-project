@@ -25,8 +25,8 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(Exception.class)
     @ResponseBody
     public Result<Void> error(HttpServletRequest request, Exception e) {
-        log.error("系统异常：", e);
-        return Result.error();
+        log.error(e, "未预期异常");
+        return Result.error(ResultCodeEnum.SYSTEM_ERROR.code, "系统繁忙，请稍后重试");
     }
 
     /**

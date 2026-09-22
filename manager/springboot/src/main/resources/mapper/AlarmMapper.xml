@@ -5,7 +5,7 @@
 <mapper namespace="com.example.mapper.AlarmMapper">
 
     <sql id="Base_Column_List">
-        al.id,al.alarm_no,al.app_id,al.server_id,al.`level`,al.content,al.status,al.handler,
+        al.id,al.alarm_no,al.app_id,al.server_id,al.deploy_no,al.`level`,al.content,al.status,al.handler,
         al.handle_time,al.resolve_time,al.create_time,al.update_time,al.deleted
     </sql>
 
@@ -65,6 +65,7 @@
                 <if test="alarmNo != null">alarm_no,</if>
                 <if test="appId != null">app_id,</if>
                 <if test="serverId != null">server_id,</if>
+                <if test="deployNo != null">deploy_no,</if>
                 <if test="level != null">`level`,</if>
                 <if test="content != null">content,</if>
                 <if test="status != null">status,</if>
@@ -76,6 +77,7 @@
                 <if test="alarmNo != null">#{alarmNo},</if>
                 <if test="appId != null">#{appId},</if>
                 <if test="serverId != null">#{serverId},</if>
+                <if test="deployNo != null">#{deployNo},</if>
                 <if test="level != null">#{level},</if>
                 <if test="content != null">#{content},</if>
                 <if test="status != null">#{status},</if>
@@ -96,6 +98,9 @@
             </if>
             <if test="serverId != null">
                 server_id = #{serverId},
+            </if>
+            <if test="deployNo != null">
+                deploy_no = #{deployNo},
             </if>
             <if test="level != null">
                 `level` = #{level},

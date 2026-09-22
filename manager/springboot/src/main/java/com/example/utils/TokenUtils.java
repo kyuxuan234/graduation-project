@@ -32,6 +32,18 @@ public class TokenUtils {
     private static AdminService staticAdminService;
     private static DevService staticDevService;
     private static OpsService staticOpsService;
+    private static final ThreadLocal<Account> BOUND_USER = new ThreadLocal<Account>();
+
+    /**
+     * 单测绑定当前用户。未绑定时仍从请求头里的 token 解析。
+     */
+    public static void bindCurrentUser(Account account) {
+        BOUND_USER.set(account);
+    }
+
+    public static void unbindCurrentUser() {
+        BOUND_USER.remove();
+    }
 
     @Resource
     AdminService adminService;
@@ -62,6 +74,10 @@ public class TokenUtils {
      * 获取当前登录的用户信息
      */
     public static Account getCurrentUser() {
+        Account bound = BOUND_USER.get();
+        if (bound != null) {
+            return bound;
+        }
         try {
             HttpServletRequest request = ((ServletRequestAttributes) RequestContextHolder.getRequestAttributes()).getRequest();
             String token = request.getHeader(Constants.TOKEN);

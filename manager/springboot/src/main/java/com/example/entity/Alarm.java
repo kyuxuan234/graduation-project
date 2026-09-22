@@ -16,6 +16,8 @@ public class Alarm implements Serializable {
     private Integer appId;
     /** 关联服务器id */
     private Integer serverId;
+    /** 关联部署单编号 */
+    private String deployNo;
     /** 级别：INFO-提示 WARNING-警告 CRITICAL-严重 */
     private String level;
     /** 告警内容 */
@@ -77,6 +79,14 @@ public class Alarm implements Serializable {
 
     public void setServerId(Integer serverId) {
         this.serverId = serverId;
+    }
+
+    public String getDeployNo() {
+        return deployNo;
+    }
+
+    public void setDeployNo(String deployNo) {
+        this.deployNo = deployNo;
     }
 
     public String getLevel() {

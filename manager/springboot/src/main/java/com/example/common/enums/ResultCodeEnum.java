@@ -41,6 +41,11 @@ public enum ResultCodeEnum {
     STATUS_LOCKED_ERROR("6020", "当前状态不允许该操作"),
     ALARM_HANDLE_NO_PERMISSION("6021", "只有OPS角色才能处置告警"),
     ALARM_NOT_HANDLER_ERROR("6022", "只有接手人才能标记解决"),
+    FILE_TYPE_ERROR("6023", "不支持的文件类型"),
+    FILE_NAME_INVALID_ERROR("6024", "非法的文件名"),
+    MAIL_NOT_CONFIGURED_ERROR("6025", "邮件服务未配置"),
+    MAIL_PERSON_EMAIL_MISSING("6026", "当前账号未在人员资料中配置邮箱"),
+    MAIL_SEND_ERROR("6027", "邮件发送失败"),
     ;
 
     public String code;

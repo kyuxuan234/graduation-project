@@ -138,7 +138,7 @@ SOURCE manager/springboot/src/main/resources/sql/schema.sql;
 SOURCE manager/springboot/src/main/resources/sql/data.sql;
 ```
 
-已有旧库需要补外键或把明文密码刷成加盐 MD5 时，再用同目录下的 `upgrade_fk.sql`、`upgrade_password.sql`。
+已有旧库需要补外键、把明文密码刷成加盐 MD5、给 `alarm` 补 `deploy_no`、或给旧 `admin` 表补 `status` / `deleted` 时，再用同目录下的 `upgrade_fk.sql`、`upgrade_password.sql`、`upgrade_alarm.sql`、`upgrade_admin.sql`。
 
 ### 启动
 

@@ -8,6 +8,19 @@ spring:
     username: root   #你本地的数据库用户名
     password: 123456 #你本地的数据库密码
     url: jdbc:mysql://localhost:3306/manager?useUnicode=true&characterEncoding=utf-8&allowMultiQueries=true&useSSL=false&serverTimezone=GMT%2b8&allowPublicKeyRetrieval=true
+  mail:
+    # 授权码来自 .env 的 MAIL_PASSWORD（启动前写入系统属性）。留空则不发信，也不阻断启动。
+    host: ${MAIL_HOST:smtp.yeah.net}
+    port: ${MAIL_PORT:465}
+    username: ${MAIL_USERNAME:yuxuan236@yeah.net}
+    password: ${MAIL_PASSWORD:}
+    default-encoding: UTF-8
+    properties:
+      mail:
+        smtp:
+          auth: true
+          ssl:
+            enable: true
   servlet:
     multipart:
       max-file-size: 100MB
@@ -18,7 +31,6 @@ mybatis:
   mapper-locations: classpath:mapper/*.xml
   type-aliases-package: com.example.entity
   configuration:
-    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
     map-underscore-to-camel-case: true
 
 # 分页
@@ -29,3 +41,6 @@ pagehelper:
   params: count=countSql
 
 ip: localhost
+
+file:
+  upload-dir: ${FILE_UPLOAD_DIR:files}

@@ -1,3 +1,7 @@
+# Local secrets. .env.example stays tracked.
+.env
+.env.local
+
 # Vue / Node
 node_modules/
 dist/
@@ -17,7 +21,7 @@ target/
 hs_err_pid*
 replay_pid*
 
-# Runtime uploads
+# Runtime uploads（只忽略仓库根和后端工作目录，manager/files 里的提示词要留着）
 /files/
 
 # Logs & temp

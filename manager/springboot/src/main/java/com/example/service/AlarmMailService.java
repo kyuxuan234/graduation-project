@@ -9,6 +9,7 @@ import com.example.entity.PersonMailAddress;
 import com.example.exception.BusinessException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
@@ -36,7 +37,8 @@ public class AlarmMailService {
         return t;
     });
 
-    @Resource
+    /** 未配置 spring.mail.host 时不创建该 bean，缺邮件不能挡住启动 */
+    @Autowired(required = false)
     private JavaMailSender mailSender;
     @Resource
     private PersonMailService personMailService;
@@ -56,7 +58,7 @@ public class AlarmMailService {
     private String password;
 
     public boolean isTransportReady() {
-        return enabled && StrUtil.isNotBlank(smtpUser) && StrUtil.isNotBlank(password);
+        return enabled && mailSender != null && StrUtil.isNotBlank(smtpUser) && StrUtil.isNotBlank(password);
     }
 
     /**
@@ -97,10 +99,7 @@ public class AlarmMailService {
      * 超级管理员连通性测试：发件人取超管人员邮箱，收件人用 alarm.mail.to。
      */
     public Map<String, String> sendTest(Account admin) {
-        if (!enabled || StrUtil.isBlank(smtpUser) || StrUtil.isBlank(testTo)) {
-            throw new BusinessException(ResultCodeEnum.MAIL_NOT_CONFIGURED_ERROR);
-        }
-        if (StrUtil.isBlank(password)) {
+        if (!isTransportReady() || StrUtil.isBlank(testTo)) {
             throw new BusinessException(ResultCodeEnum.MAIL_NOT_CONFIGURED_ERROR);
         }
         String from = personMailService.emailOf(admin);
@@ -163,6 +162,9 @@ public class AlarmMailService {
      * 不能把人员表里的 QQ/其它邮箱写进 MAIL FROM，否则信发不出去。
      */
     private void send(String fromEmail, String fromName, List<PersonMailAddress> recipients, String subject, String text) throws Exception {
+        if (mailSender == null) {
+            throw new BusinessException(ResultCodeEnum.MAIL_NOT_CONFIGURED_ERROR);
+        }
         MimeMessage mime = mailSender.createMimeMessage();
         MimeMessageHelper helper = new MimeMessageHelper(mime, false, "UTF-8");
         String senderName = StrUtil.blankToDefault(fromName, "运维管理系统");

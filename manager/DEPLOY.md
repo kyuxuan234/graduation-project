@@ -4,7 +4,9 @@
 
 以下命令都在 `manager/` 目录执行（本文件所在目录）。镜像名在 `docker-compose.yml` 里写成 `manager-backend:latest`、`manager-frontend:latest`。
 
-曾在 WSL2（Ubuntu 24.04，Docker 29）跑通：三个容器 `healthy`，`/actuator/health` 为 `UP`，`http://localhost:8080/login` 返回 200，经 nginx 的 `/api/login` 用 `admin` / `admin` 能登录。备份命令按 compose 写法核对过语法。
+曾在 WSL2（Ubuntu 24.04，Docker 29）跑通：`/actuator/health` 为 `UP`，`http://localhost:8080/login` 返回 200，经 nginx 的 `/api/login` 用 `admin` / `admin` 能登录。备份命令按 compose 写法核对过语法。
+
+关于容器健康状态：`docker-compose.yml` 只给 `mysql` 定义了 `healthcheck`，`backend` 的 healthcheck 来自 `springboot/Dockerfile` 里的 `HEALTHCHECK`，这两者会显示 `healthy`；**`frontend` 没有定义 healthcheck，不会显示 `healthy`**，只要 `8080` 端口可访问即视为正常。
 
 ## 1. 前置要求
 

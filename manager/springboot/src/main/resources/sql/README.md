@@ -44,7 +44,7 @@ SOURCE upgrade_fk.sql;
 - `upgrade_password.sql` 只更新已有的 `password` 列，不建列、不建外键。数据订正放在补列之后。它不依赖 `status` 或 `deploy_no`。
 - `upgrade_fk.sql` 添加的 7 条外键引用的是这些表原来就有的主键列，不依赖 admin 的新列，也不依赖 `deploy_no`。外键放在最后，避免先套上约束再改表。
 
-## 第 3 步新增
+## 后续升级（第 5–10 步，新增功能）
 
 接在上面 4 个脚本后面，按这个顺序手工执行。每一条执行前先备份。不要跑 `upgrade_password.sql` 来“顺便升级”，它会把密码改回初始口令。
 

@@ -40,7 +40,7 @@ import static org.mockito.Mockito.when;
 
 /**
  * 部署状态变更必须写流转日志。用 Mockito 避免污染本地库。
- * 当前日志只有 action，没有 log_type 列。
+ * STATE 流转经 saveLog 落库；EXEC 行由 DeployExecutionService.LogBuffer 写入（本类不覆盖）。
  */
 @ExtendWith(MockitoExtension.class)
 class DeployServiceStatusTest {

@@ -1,4 +1,4 @@
-# DevOps 运维管理系统
+# DevOps 发布管理系统
 
 毕业设计：面向开发 / 运维 / 管理员的发布部署管理系统。用资产台账把 **项目 → 服务器 → 应用 → 部署单 → 告警** 串成闭环，部署单走审批状态机，成功后才把应用置为在线并反写版本。
 
@@ -47,7 +47,7 @@ MyBatis Mapper  ↔  MySQL manager
 
 - 前端直连 `http://localhost:9090`（`.env.development`），不做 webpack 代理；后端 `CorsFilter` 放行跨域。
 - JWT 放在请求头 `token`，签名密钥为配置项 `jwt.secret`（本地见 `application-dev.yml`，生产见环境变量 `JWT_SECRET`），有效期 2 小时。
-- 登录按 `admin` → `dev` → `ops` 三张账号表解析角色；密码为 `MD5(明文 + devops_salt_2026)`。
+- 登录按 `admin` → `dev` → `ops` 三张账号表解析角色；**新密码用 BCrypt 存储**，库里历史遗留的 32 位 `MD5(明文 + devops_salt_2026)` 密文仍可登录（兼容读，见 `utils/PasswordUtils.java`）。
 
 ### 资产闭环（以应用为枢纽）
 
@@ -68,7 +68,7 @@ project ──► app ◄── server
 | DEV | `dev` | 发起部署申请；只能改自己的待审批单；可见项目 / 应用 / 部署 / 告警 / 分析 |
 | OPS | `ops` | 管服务器与 SSH 凭据；审批、开始/结束部署、回滚；接手并闭环告警 |
 
-侧边栏：仪表盘 / 应用 / 部署 / 告警 / 运维分析全员可见；**服务器仅 ADMIN+OPS**；项目 ADMIN+DEV；人员与公告仅 ADMIN。路由 `meta.roles` 与接口层再各卡一次。
+侧边栏：仪表盘 / 应用 / 部署 / 告警 / 运维分析全员可见；**服务器仅 ADMIN+OPS**；项目 ADMIN+DEV；人员与公告仅 ADMIN。路由 `meta.roles` 与接口层再各卡一次。接口层的角色校验由 `AuthUtils.requireRole` 把关，其中 **ADMIN 会被无条件放行（旁路角色校验）**，便于演示与排障（前端登录与 WebSocket 握手同样接受 ADMIN）。
 
 ### 主要页面
 
@@ -197,7 +197,7 @@ CRUD 统一：`POST /{模块}/add`、`PUT /update`、`DELETE /delete/{id}`、`GE
 | PUT | `/deploy/rollback/{id}` | OPS |
 | PUT | `/alarm/handle/{id}`、`/alarm/resolve/{id}` | OPS |
 
-统计与分析：`/statistics/*`（含部署趋势、告警状态、错误 TOP 等）。WebSocket 终端：`/ssh/{serverId}`。
+统计与分析：`/statistics/*`（含部署趋势、告警状态、错误 TOP 等）。WebSocket 终端：`/ssh/terminal?deployId={部署单id}&token={登录token}`，仅 OPS/ADMIN 且必须挂在一张部署单上（见 `common/config/SshWebSocketConfig.java`、`SshHandshakeInterceptor`）。
 
 ### 自测
 
@@ -206,4 +206,4 @@ cd manager/springboot
 mvn test
 ```
 
-当前覆盖部署状态机等。前端改完后用 `npm run serve` 看页面即可。
+当前共 **11 个测试类 / 52 个用例**，覆盖部署状态机、CAS 审批、SSH 主机密钥校验、凭据加密、密码兼容、上传文件名安全等（如 `DeployServiceStatusTest`、`DeployMapperCasApproveXmlTest`、`DeployStatusMachineTest`、`SshHostKeyVerifierTest`）。前端改完后用 `npm run serve` 看页面即可。

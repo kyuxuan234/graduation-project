@@ -45,7 +45,7 @@ INSERT INTO `project` (`id`, `name`, `code`, `tech_stack`, `leader`, `status`, `
 (2, '统一用户中心', 'PRJ-002', 'Spring Cloud + MySQL + Redis + JWT', '李娜', 'IN_PROGRESS', '2025-01-15', '2025-09-30', '为集团各业务线提供统一的账号注册、登录鉴权与权限管理能力'),
 (3, '数据可视化大屏', 'PRJ-003', 'Vue2 + ECharts + Nginx', '王强', 'FINISHED', '2024-06-01', '2024-12-20', '经营指标实时可视化大屏，已完成验收并交付运营部门使用'),
 (4, '移动端APP后台', 'PRJ-004', 'Spring Boot + MongoDB + RabbitMQ', '赵敏', 'PAUSED', '2025-02-10', '2025-11-30', '移动端 APP 服务端项目，因产品需求调整暂停开发'),
-(5, '智能运维监控平台', 'PRJ-005', 'Spring Boot + Prometheus + Grafana', '陈磊', 'NOT_STARTED', '2026-01-05', '2026-08-31', '统一采集主机与应用指标，提供告警与自愈能力，尚未启动开发');
+(5, '智能运维监控平台', 'PRJ-005', 'Spring Boot + 自研探活', '陈磊', 'NOT_STARTED', '2026-01-05', '2026-08-31', '统一采集主机与应用指标，提供告警与自愈能力，尚未启动开发');
 
 -- ----------------------------
 -- 4. 服务器（8条，DEV / TEST / PROD 三种环境均有，状态各异）
@@ -71,7 +71,7 @@ INSERT INTO `app` (`id`, `name`, `code`, `project_id`, `server_id`, `port`, `ver
 (5, '用户中心服务', 'APP-005', 2, 1, 8084, 'v1.4.0', 'Spring Boot + MyBatis + MySQL', 'http://git.devops.com/uc/user-service.git', 'OFFLINE'),
 (6, '数据大屏服务', 'APP-006', 3, 3, 8085, 'v1.0.6', 'Vue2 + ECharts + Nginx', 'http://git.devops.com/bi/dashboard.git', 'ONLINE'),
 (7, '移动端网关', 'APP-007', 4, 2, 8086, 'v0.9.1', 'Spring Cloud Gateway + MongoDB', 'http://git.devops.com/app/mobile-gateway.git', 'OFFLINE'),
-(8, '监控采集服务', 'APP-008', 5, 4, 8087, 'v0.1.0', 'Spring Boot + Prometheus', 'http://git.devops.com/ops/monitor-agent.git', 'OFFLINE');
+(8, '监控采集服务', 'APP-008', 5, 4, 8087, 'v0.1.0', 'Spring Boot + 自研探活', 'http://git.devops.com/ops/monitor-agent.git', 'OFFLINE');
 
 -- ----------------------------
 -- 6. 部署单（10条，覆盖 PENDING / APPROVED / REJECTED / DEPLOYING / SUCCESS / FAILED 全部状态）

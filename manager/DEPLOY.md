@@ -1,8 +1,10 @@
-# 内网部署
+# 内网部署（Docker）
+
+本机 IDE / 命令行直连本机 MySQL 的用法见仓库根目录 `README.md`。本文只写 Docker Compose 一键起全栈。
 
 以下命令都在 `manager/` 目录执行（本文件所在目录）。镜像名在 `docker-compose.yml` 里写成 `manager-backend:latest`、`manager-frontend:latest`。
 
-已在本机 WSL2（Ubuntu 24.04，Docker 29）跑通一次：三个容器都起来，`mysql` 和 `backend` 为 healthy，`/actuator/health` 返回 `{"status":"UP"}`，`http://localhost:8080/login` 返回 200，经 nginx 的 `/api/login` 用 `admin` / `admin` 能登录。备份命令按 compose 写法核对过语法，没有在这台机器上导出过整库文件。
+曾在 WSL2（Ubuntu 24.04，Docker 29）跑通：三个容器 `healthy`，`/actuator/health` 为 `UP`，`http://localhost:8080/login` 返回 200，经 nginx 的 `/api/login` 用 `admin` / `admin` 能登录。备份命令按 compose 写法核对过语法。
 
 ## 1. 前置要求
 
@@ -36,7 +38,8 @@ copy .env.example .env
 | `DB_NAME` | 库名，示例是 `manager`。要和容器里新建的库一致 |
 | `DB_USERNAME` | 填 `root`。容器用这个账号连库 |
 | `DB_PASSWORD` | MySQL root 密码。不能空 |
-| `JWT_SECRET` | 随机串，不能空，不能用示例值 |
+| `JWT_SECRET` | 随机串，不能空，不能用示例值。只用于签发/校验登录 token，与账号密码无关 |
+| `CREDENTIAL_KEY` | SSH 密码与私钥入库前的加密密钥。生产必填；留空则凭据按明文存，探活会记配置错误 |
 | `CORS_ALLOWED_ORIGINS` | 浏览器直接访问后端时的来源。经前端 `/api` 转发时是同源，这项不参与页面请求。示例 `http://localhost:8080` |
 | `MAIL_HOST` / `MAIL_PORT` / `MAIL_USERNAME` / `MAIL_PASSWORD` | 发告警邮件用。密码留空则不发信，不阻止启动 |
 
@@ -133,7 +136,7 @@ docker compose ps
 
 数据库连不上：
 
-- `.env` 里 `DB_PASSWORD`、`JWT_SECRET` 是否为空。生产配置没有默认值，空着后端会退出。
+- `.env` 里 `DB_PASSWORD`、`JWT_SECRET` 是否为空。生产配置没有默认值，空着后端会退出。`CREDENTIAL_KEY` 为空能启动，但 SSH 凭据不会加密。
 - `docker compose ps` 里 `mysql` 是否 `healthy`。不健康时看 `docker compose logs mysql`。
 - 后端连的是服务名 `mysql`，不是 `.env` 里的 `DB_HOST=localhost`。
 
@@ -168,7 +171,7 @@ docker load -i manager-images.tar
 
 后端默认每 2 分钟检查一台状态为运行中的服务器，半分钟后再检查在线应用。线程名前缀是 `health-check-`。本地 `application-dev.yml` 里 `healthcheck.enabled` 是 false，容器里的生产配置是 true。
 
-服务器要填 SSH 用户、端口、认证方式和部署目录，否则记一条配置不完整的告警，不会去连。生产环境的 SSH 密码和私钥用 `CREDENTIAL_KEY` 加密后入库。密钥为空时仍能启动，但凭据按明文保存，探活会把这种情况当成配置错误。
+服务器要填 SSH 用户、端口、登记密码和部署目录，否则记一条配置不完整的告警，不会去连。保存时系统会用登记密码登录一次，生成私钥并写入目标机 `authorized_keys`，之后探活与自动部署走密钥（`ssh_auth_type=KEY`）。生产环境的 SSH 密码和私钥用 `CREDENTIAL_KEY` 加密后入库；密钥为空时仍能启动，但凭据按明文保存，探活会把这种情况当成配置错误。
 
 同一台机器或同一个应用，未处理和处置中的自动告警在 `healthcheck.auto-alarm-cooldown-minutes`（默认 30 分钟）内不重复创建。冷却结束后如果还是失败，会再记一条「故障复发」。探活恢复只在告警内容末尾补「探活已恢复」，不会自动改成已解决。
 

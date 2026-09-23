@@ -41,7 +41,7 @@ public class Server implements Serializable {
     private Integer sshPort;
     /** SSH 登录用户名 */
     private String sshUser;
-    /** PASSWORD 或 KEY */
+    /** PASSWORD=尚未生成登录私钥；KEY=已按登记密码生成私钥 */
     private String sshAuthType;
     /** SSH 密码（密文） */
     private String sshPassword;

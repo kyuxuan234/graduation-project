@@ -81,11 +81,13 @@
           </template>
         </el-table-column>
 
-        <el-table-column label="操作" align="center" width="200">
+        <el-table-column label="操作" align="center" width="100" fixed="right">
+          <template slot="header"><span class="th-label"><i class="el-icon-s-operation"></i>操作</span></template>
           <template v-slot="scope">
             <div class="op-btns">
-              <el-button type="text" class="op-primary" :disabled="!canEdit(scope.row)" @click="handleEdit(scope.row)">编辑</el-button>
-              <el-button type="text" class="op-danger" :disabled="!canDelete(scope.row)" @click="del(scope.row.id)">删除</el-button>
+              <el-button v-if="canEdit(scope.row)" type="primary" size="mini" icon="el-icon-edit" title="编辑" @click="handleEdit(scope.row)">编辑</el-button>
+              <el-button v-else type="info" size="mini" icon="el-icon-view" title="查看" @click="handleView(scope.row)">查看</el-button>
+              <el-button type="danger" size="mini" icon="el-icon-delete" title="删除" :disabled="!canDelete(scope.row)" @click="del(scope.row.id)">删除</el-button>
             </div>
           </template>
         </el-table-column>
@@ -104,8 +106,8 @@
       </div>
     </div>
 
-    <el-dialog title="项目信息" :visible.sync="fromVisible" width="40%" :close-on-click-modal="false" destroy-on-close>
-      <el-form :model="form" label-width="100px" style="padding-right: 50px" :rules="rules" ref="formRef">
+    <el-dialog :title="formReadonly ? '查看项目' : '项目信息'" :visible.sync="fromVisible" width="40%" :close-on-click-modal="false" destroy-on-close>
+      <el-form :model="form" label-width="100px" style="padding-right: 50px" :rules="rules" ref="formRef" :disabled="formReadonly">
         <el-form-item label="项目名" prop="name">
           <el-input v-model="form.name" placeholder="项目名"></el-input>
         </el-form-item>
@@ -136,8 +138,8 @@
         </el-form-item>
       </el-form>
       <div slot="footer" class="dialog-footer">
-        <el-button @click="fromVisible = false" icon="el-icon-close">取 消</el-button>
-        <el-button type="primary" @click="save" icon="el-icon-check">确 定</el-button>
+        <el-button @click="fromVisible = false" icon="el-icon-close">{{ formReadonly ? '关 闭' : '取 消' }}</el-button>
+        <el-button v-if="!formReadonly" type="primary" @click="save" icon="el-icon-check">确 定</el-button>
       </div>
     </el-dialog>
 
@@ -145,18 +147,20 @@
 </template>
 
 <script>
-import { personName, personRoleName, roleTag } from '@/utils/person'
+import { personName, personRoleName, roleTag, canOps } from '@/utils/person'
 
 export default {
   name: "Project",
   data() {
     return {
+      user: JSON.parse(localStorage.getItem('xm-user') || '{}'),
       tableData: [],  // 所有的数据
       pageNum: 1,   // 当前的页码
       pageSize: 20,  // 每页显示的个数
       total: 0,
       params: { id: null, name: null, status: null, leader: null },   // 搜索条件
       fromVisible: false,
+      formReadonly: false,
       form: {},
       statusOptions: [
         { value: 'NOT_STARTED', label: '未开始' },
@@ -202,12 +206,19 @@ export default {
       return row.status !== 'FINISHED' && row.status !== 'PAUSED'
     },
     handleAdd() {   // 新增数据
+      this.formReadonly = false
       this.form = { status: 'NOT_STARTED' }  // 新增数据的时候清空数据
       this.fromVisible = true   // 打开弹窗
     },
     handleEdit(row) {   // 编辑数据
+      this.formReadonly = false
       this.form = JSON.parse(JSON.stringify(row))  // 给form对象赋值  注意要深拷贝数据
       this.fromVisible = true   // 打开弹窗
+    },
+    handleView(row) {   // 已完结等不可改状态：只读查看
+      this.formReadonly = true
+      this.form = JSON.parse(JSON.stringify(row))
+      this.fromVisible = true
     },
     save() {   // 保存按钮触发的逻辑  它会触发新增或者更新
       this.$refs.formRef.validate((valid) => {
@@ -288,6 +299,10 @@ export default {
       this.$router.push({ path: '/app', query: { projectId: row.id } })
     },
     goServers(row) {
+      if (!canOps(this.user)) {
+        this.$message.info('服务器由运维管理，相关主机可在应用中查看')
+        return
+      }
       this.$router.push({ path: '/server', query: { projectId: row.id } })
     },
   }

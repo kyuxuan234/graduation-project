@@ -3,6 +3,7 @@ package com.example.service;
 import cn.hutool.core.util.StrUtil;
 import com.example.common.DeployExecutor;
 import com.example.common.DeployScripts;
+import com.example.common.enums.DeployExecuteModeEnum;
 import com.example.common.enums.DeployStatusEnum;
 import com.example.common.enums.DeployTypeEnum;
 import com.example.common.enums.ResultCodeEnum;
@@ -73,8 +74,9 @@ public class DeployExecutionService {
     @Value("${deploy.execution.max-retry:2}")
     private int maxRetry;
 
-    public void startDeployEntry(Integer id) {
+    public void startDeployEntry(Integer id, String executeMode) {
         Account currentUser = AuthUtils.requireRole(ResultCodeEnum.DEPLOY_EXECUTE_NO_PERMISSION, RoleEnum.OPS);
+        String mode = normalizeMode(executeMode);
         Deploy dbDeploy = deployService.selectById(id);
         if (dbDeploy == null) {
             throw new BusinessException(ResultCodeEnum.DEPLOY_NOT_EXIST_ERROR);
@@ -82,7 +84,15 @@ public class DeployExecutionService {
         if (deployMapper.countOtherDeploying(dbDeploy.getAppId(), id) > 0) {
             throw new BusinessException(ResultCodeEnum.DEPLOY_BUSY);
         }
+        Deploy patch = new Deploy();
+        patch.setId(id);
+        patch.setExecuteMode(mode);
+        deployMapper.updateById(patch);
+        dbDeploy.setExecuteMode(mode);
         deployService.startDeploy(id);
+        if (manual(dbDeploy)) {
+            return;
+        }
         submit(id, currentUser.getUsername(), false);
     }
 
@@ -96,6 +106,9 @@ public class DeployExecutionService {
             throw new BusinessException(ResultCodeEnum.DEPLOY_BUSY);
         }
         deployService.rollback(id);
+        if (manual(dbDeploy)) {
+            return;
+        }
         submit(id, currentUser.getUsername(), true);
     }
 
@@ -181,6 +194,17 @@ public class DeployExecutionService {
             }
             fail(execution, buffer, operator, null, message, retry, status);
         }
+    }
+
+    private boolean manual(Deploy deploy) {
+        return deploy != null && DeployExecuteModeEnum.MANUAL.name().equals(deploy.getExecuteMode());
+    }
+
+    private String normalizeMode(String mode) {
+        if (DeployExecuteModeEnum.AUTO.name().equals(mode) || DeployExecuteModeEnum.MANUAL.name().equals(mode)) {
+            return mode;
+        }
+        throw new BusinessException(ResultCodeEnum.PARAM_ERROR);
     }
 
     private void submit(Integer id, String operator, boolean rollback) {

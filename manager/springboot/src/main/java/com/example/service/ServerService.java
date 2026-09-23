@@ -3,6 +3,8 @@ package com.example.service;
 import cn.hutool.core.util.ObjectUtil;
 import cn.hutool.core.util.StrUtil;
 import com.example.common.CredentialCipher;
+import com.example.common.SshDeployExecutor;
+import com.example.common.SshKeyMaterial;
 import com.example.common.enums.ResultCodeEnum;
 import com.example.common.enums.ServerStatusEnum;
 import com.example.entity.Server;
@@ -11,6 +13,8 @@ import com.example.mapper.AppMapper;
 import com.example.mapper.ServerMapper;
 import com.github.pagehelper.PageHelper;
 import com.github.pagehelper.PageInfo;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 import javax.annotation.Resource;
@@ -22,6 +26,8 @@ import java.util.List;
 @Service
 public class ServerService {
 
+    private static final Logger log = LoggerFactory.getLogger(ServerService.class);
+
     @Resource
     private ServerMapper serverMapper;
 
@@ -30,6 +36,9 @@ public class ServerService {
 
     @Resource
     private CredentialCipher credentialCipher;
+
+    @Resource
+    private SshDeployExecutor sshDeployExecutor;
 
     /**
      * 新增
@@ -134,16 +143,29 @@ public class ServerService {
         if (server.getSshPort() == null) {
             server.setSshPort(22);
         }
-        if (StrUtil.isBlank(server.getSshPassword())) {
+        String password = server.getSshPassword();
+        server.setSshAuthType(null);
+        server.setSshPrivateKey(null);
+        if (StrUtil.isBlank(password)) {
             server.setSshPassword(null);
-        } else {
-            server.setSshPassword(credentialCipher.encrypt(server.getSshPassword()));
+            return;
         }
-        if (StrUtil.isBlank(server.getSshPrivateKey())) {
-            server.setSshPrivateKey(null);
-        } else {
-            server.setSshPrivateKey(credentialCipher.encrypt(server.getSshPrivateKey()));
+        if (StrUtil.isBlank(server.getIp()) || StrUtil.isBlank(server.getSshUser())) {
+            throw new BusinessException("400", "填写 SSH 密码时需要同时填写地址和用户");
         }
+        SshKeyMaterial key = SshKeyMaterial.generate();
+        int port = server.getSshPort();
+        try {
+            sshDeployExecutor.provisionLoginKey(server.getIp(), port, server.getSshUser(), password,
+                    key.getPrivatePem(), key.getPublicLine());
+        } catch (Exception e) {
+            log.warn("用登记密码放置登录私钥失败 host={}", server.getHostname());
+            throw new BusinessException("400", "登记的密码无法登录这台服务器，没有生成登录私钥");
+        }
+        server.setSshPassword(credentialCipher.encrypt(password));
+        server.setSshPrivateKey(credentialCipher.encrypt(key.getPrivatePem()));
+        server.setSshAuthType("KEY");
+        log.info("已按登记密码生成登录私钥 host={}", server.getHostname());
     }
 
     private void hideSecrets(Server server) {

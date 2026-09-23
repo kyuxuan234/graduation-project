@@ -153,6 +153,15 @@ public class SshDeployExecutor implements DeployExecutor {
         }
     }
 
+    /**
+     * 给交互式终端用。命令执行仍走带读超时的连接，避免空闲脚本一直占着。
+     */
+    public SSHClient connectShell(Server server) throws Exception {
+        SSHClient client = open(server);
+        client.setTimeout(0);
+        return client;
+    }
+
     private SSHClient open(Server server) throws Exception {
         if (server == null || StrUtil.isBlank(server.getIp()) || StrUtil.isBlank(server.getSshUser())) {
             throw new IllegalStateException("SSH 配置不完整");
@@ -169,14 +178,7 @@ public class SshDeployExecutor implements DeployExecutor {
                 client.disconnect();
                 throw new IllegalStateException("私钥无法解密");
             }
-            Path keyFile = Files.createTempFile("ssh-key-", ".pem");
-            try {
-                Files.write(keyFile, keyText.getBytes(StandardCharsets.UTF_8));
-                KeyProvider keys = client.loadKeys(keyFile.toString());
-                client.authPublickey(server.getSshUser(), keys);
-            } finally {
-                Files.deleteIfExists(keyFile);
-            }
+            authPublicKey(client, server.getSshUser(), keyText);
         } else {
             String password = credentialCipher.decrypt(server.getSshPassword());
             if (password == null) {
@@ -186,6 +188,79 @@ public class SshDeployExecutor implements DeployExecutor {
             client.authPassword(server.getSshUser(), password);
         }
         return client;
+    }
+
+    /**
+     * 用登记的密码登录一次，把对应公钥写入目标机，并确认私钥能登录。
+     */
+    public void provisionLoginKey(String ip, int port, String user, String password, String privatePem, String publicLine) throws Exception {
+        SSHClient client = newClient();
+        try {
+            client.connect(ip, port);
+            client.authPassword(user, password);
+            int code = exec(client, installScript(publicLine));
+            if (code != 0) {
+                throw new IllegalStateException("写入登录公钥失败");
+            }
+        } finally {
+            disconnect(client);
+        }
+        SSHClient check = newClient();
+        try {
+            check.connect(ip, port);
+            authPublicKey(check, user, privatePem);
+        } finally {
+            disconnect(check);
+        }
+    }
+
+    private SSHClient newClient() {
+        SSHClient client = new SSHClient();
+        client.addHostKeyVerifier(new PromiscuousVerifier());
+        client.setConnectTimeout(10000);
+        client.setTimeout(10000);
+        return client;
+    }
+
+    private void authPublicKey(SSHClient client, String user, String privatePem) throws Exception {
+        Path keyFile = Files.createTempFile("ssh-key-", ".pem");
+        try {
+            Files.write(keyFile, privatePem.getBytes(StandardCharsets.UTF_8));
+            KeyProvider keys = client.loadKeys(keyFile.toString());
+            client.authPublickey(user, keys);
+        } finally {
+            Files.deleteIfExists(keyFile);
+        }
+    }
+
+    private int exec(SSHClient client, String command) throws Exception {
+        Session session = client.startSession();
+        try {
+            Session.Command cmd = session.exec(command);
+            cmd.join(15, TimeUnit.SECONDS);
+            Integer exit = cmd.getExitStatus();
+            return exit == null ? 1 : exit;
+        } finally {
+            session.close();
+        }
+    }
+
+    private String installScript(String publicLine) {
+        String script = "set -e; umask 077; mkdir -p \"$HOME/.ssh\"; chmod 700 \"$HOME/.ssh\"; "
+                + "touch \"$HOME/.ssh/authorized_keys\"; "
+                + "grep -v '" + SshKeyMaterial.COMMENT + "' \"$HOME/.ssh/authorized_keys\" > \"$HOME/.ssh/authorized_keys.manager-tmp\" || true; "
+                + "printf '%s\\n' '" + publicLine + "' >> \"$HOME/.ssh/authorized_keys.manager-tmp\"; "
+                + "mv \"$HOME/.ssh/authorized_keys.manager-tmp\" \"$HOME/.ssh/authorized_keys\"; "
+                + "chmod 600 \"$HOME/.ssh/authorized_keys\"";
+        return "sh -c " + quote(script);
+    }
+
+    private void disconnect(SSHClient client) {
+        try {
+            client.disconnect();
+        } catch (Exception ignored) {
+            log.debug("关闭 SSH 连接失败");
+        }
     }
 
     private String quote(String value) {

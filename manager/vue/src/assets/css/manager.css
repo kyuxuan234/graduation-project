@@ -87,22 +87,32 @@
 .manager-main-right {
     flex: 1;
     width: 0;
-    padding: 16px 18px 20px;
+    padding: 18px 22px 24px;
 }
 
 .page-head {
     display: flex;
     align-items: center;
-    margin-bottom: 12px;
-    color: #303133;
-    font-size: 18px;
+    margin-bottom: 14px;
+    padding: 2px 2px 12px;
+    color: #1f2a44;
+    font-size: 20px;
     font-weight: 600;
+    letter-spacing: 0.3px;
+    border-bottom: 1px solid #e8eef6;
 }
 
 .page-head i {
-    margin-right: 8px;
+    margin-right: 10px;
     color: #3b7cff;
-    font-size: 20px;
+    font-size: 22px;
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    background: #eef4ff;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
 }
 
 .manager-main-right .search,
@@ -112,18 +122,18 @@
 .card,
 .relation-bar {
     background-color: #fff;
-    border-radius: 10px;
-    box-shadow: 0 4px 14px rgba(31, 42, 68, 0.06);
-    border: 1px solid #eef1f6;
+    border-radius: 12px;
+    box-shadow: 0 6px 18px rgba(31, 42, 68, 0.05);
+    border: 1px solid #e9eef5;
 }
 
 .manager-main-right .toolbar {
     display: flex;
     flex-wrap: wrap;
     justify-content: space-between;
-    align-items: center;
-    gap: 12px;
-    padding: 12px 14px;
+    align-items: flex-start;
+    gap: 12px 16px;
+    padding: 14px 16px;
 }
 
 .manager-main-right .search-fields,
@@ -134,8 +144,17 @@
     gap: 10px;
 }
 
+.manager-main-right .search-fields {
+    flex: 1 1 520px;
+}
+
+.manager-main-right .toolbar-actions {
+    flex: 0 0 auto;
+    margin-left: auto;
+}
+
 .manager-main-right .search {
-    padding: 12px 14px;
+    padding: 14px 16px;
     display: flex;
     flex-wrap: wrap;
     align-items: center;
@@ -143,17 +162,18 @@
 }
 
 .manager-main-right .operation {
-    margin-top: 10px;
-    padding: 12px 14px;
+    margin-top: 12px;
+    padding: 14px 16px;
 }
 
 .manager-main-right .table {
-    margin-top: 10px;
-    padding: 8px 8px 14px;
+    margin-top: 12px;
+    padding: 6px 6px 16px;
 }
 
 .manager-main-right .table .pagination {
-    margin-top: 14px;
+    margin-top: 16px;
+    padding: 0 10px;
     display: flex;
     justify-content: flex-end;
 }
@@ -176,13 +196,14 @@
     align-items: center;
     flex-wrap: wrap;
     padding: 12px 16px;
-    margin-bottom: 10px;
-    color: #606266;
+    margin-bottom: 12px;
+    color: #5b6472;
     font-size: 13px;
+    background: linear-gradient(90deg, #f7faff 0%, #fff 60%);
 }
 
 .relation-bar > i {
-    margin-right: 6px;
+    margin-right: 8px;
     color: #3b7cff;
 }
 
@@ -344,18 +365,56 @@
 
 .op-btns {
     display: inline-flex;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
     align-items: center;
     justify-content: center;
-    gap: 2px 8px;
+    gap: 6px;
 }
 
 .op-btns .el-button,
 .op-btns .el-button + .el-button {
     margin-left: 0;
-    padding: 0;
-    min-width: 0;
-    font-size: 13px;
+}
+
+.op-btns .el-button--mini,
+.op-icon-btn.el-button--mini {
+    padding: 7px;
+    border-radius: 6px;
+    min-width: 30px;
+}
+
+.op-btns .el-button--mini span,
+.op-icon-btn.el-button--mini span {
+    display: none;
+}
+
+.op-btns .el-button--mini [class*="el-icon-"],
+.op-icon-btn.el-button--mini [class*="el-icon-"] {
+    margin: 0;
+    font-size: 14px;
+}
+
+.el-table__fixed-right .el-table__body td.el-table__cell {
+    background: #fff;
+}
+
+.el-table__fixed-right .el-table__body tr.el-table__row--striped td.el-table__cell {
+    background: #fafbfd;
+}
+
+.el-table__fixed-right .el-table__body tr:hover > td.el-table__cell {
+    background: #f3f7ff !important;
+}
+
+@media (max-width: 960px) {
+    .manager-main-right {
+        padding: 14px 12px 18px;
+    }
+    .manager-main-right .search-fields,
+    .manager-main-right .toolbar-actions {
+        flex: 1 1 100%;
+        margin-left: 0;
+    }
 }
 
 .op-btns .op-ok { color: #67c23a; }
@@ -473,24 +532,42 @@
 }
 
 th.el-table__cell {
-    background-color: #f4f7fc !important;
+    background-color: #f6f8fc !important;
     color: #5b6472;
     font-weight: 600;
+    border-bottom: 1px solid #e8eef6 !important;
 }
 
 .el-table {
-    border-radius: 8px;
+    border-radius: 10px;
     overflow: hidden;
 }
 
+.el-table--striped .el-table__body tr.el-table__row--striped td.el-table__cell {
+    background: #fafbfd;
+}
+
+.el-table .el-table__body tr:hover > td.el-table__cell {
+    background: #f3f7ff !important;
+}
+
 .el-table .el-table__cell {
-    padding: 10px 0;
+    padding: 11px 0;
 }
 
 .el-table .cell {
     padding-left: 12px;
     padding-right: 12px;
     line-height: 22px;
+}
+
+.el-table__fixed-right::before,
+.el-table__fixed::before {
+    background-color: transparent;
+}
+
+.el-table__fixed-right-patch {
+    background: #f6f8fc;
 }
 
 .th-label,
@@ -501,12 +578,21 @@ th.el-table__cell {
     vertical-align: middle;
 }
 
+.th-label {
+    color: #4e5969;
+    font-weight: 600;
+}
+
 .th-label i,
 .cell-text > i {
-    margin-right: 5px;
+    margin-right: 6px;
     font-size: 14px;
-    color: #8b95a5;
+    color: #9aa5b5;
     flex-shrink: 0;
+}
+
+.th-label i {
+    color: #6f7d90;
 }
 
 .cell-text.is-link > i,
@@ -531,12 +617,65 @@ th.el-table__cell {
     color: #c0c4cc;
 }
 
+.el-tag {
+    border-radius: 6px;
+    font-weight: 500;
+}
+
 .el-tag i {
     margin-right: 4px;
 }
 
 .el-pagination.is-background .el-pager li:not(.disabled).active {
     background-color: #3b7cff;
+}
+
+.el-dialog {
+    border-radius: 12px;
+    overflow: hidden;
+}
+
+.el-dialog__header {
+    padding: 16px 20px 12px;
+    border-bottom: 1px solid #eef2f7;
+}
+
+.el-dialog__title {
+    font-weight: 600;
+    color: #1f2a44;
+}
+
+.el-dialog__body {
+    padding: 18px 20px 10px;
+}
+
+.el-dialog__footer {
+    padding: 12px 20px 16px;
+    border-top: 1px solid #eef2f7;
+    background: #fafbfd;
+}
+
+.dialog-footer {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 8px;
+}
+
+.dialog-footer .el-button + .el-button {
+    margin-left: 0;
+}
+
+.manager-main-right .toolbar .el-input__inner,
+.manager-main-right .toolbar .el-range-input,
+.manager-main-right .search .el-input__inner {
+    border-radius: 8px;
+}
+
+.manager-main-right .toolbar .el-button,
+.manager-main-right .search .el-button,
+.manager-main-right .operation .el-button {
+    border-radius: 8px;
 }
 
 /* 首页监控大屏：仅 dashboard 使用深色壳，管理列表保持浅色 */

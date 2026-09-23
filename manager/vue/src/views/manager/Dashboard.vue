@@ -137,6 +137,7 @@
 <script>
 import * as echarts from 'echarts'
 import OsLogo from '@/components/OsLogo'
+import { canOps } from '@/utils/person'
 
 const DEPLOY_STATUS = [
   { value: 'PENDING', name: '待审批', tone: 'warn', icon: 'el-icon-time' },
@@ -286,6 +287,14 @@ export default {
   },
   methods: {
     go(path, query) {
+      if (path === '/server' && !canOps(this.user)) {
+        this.$message.info('服务器由运维管理，开发可在应用中选择部署机')
+        return
+      }
+      if (path === '/project' && this.user.role === 'OPS') {
+        this.$message.info('项目管理面向开发与管理员')
+        return
+      }
       this.$router.push(query ? { path, query } : path)
     },
     goTicker() {
@@ -388,8 +397,13 @@ export default {
       })
     },
     loadServers() {
-      this.$request.get('/server/selectPage', { params: { pageNum: 1, pageSize: 200 } }).then(res => {
-        const list = res.data?.list || []
+      // 开发无服务器管理页权限；资产统计改走下拉接口（未停机机）
+      const asOps = canOps(this.user)
+      const req = asOps
+        ? this.$request.get('/server/selectPage', { params: { pageNum: 1, pageSize: 200 } })
+        : this.$request.get('/server/selectAll')
+      req.then(res => {
+        const list = asOps ? (res.data && res.data.list) || [] : (res.data || [])
         const osCount = { centos: 0, ubuntu: 0 }
         const envCount = { DEV: 0, TEST: 0, PROD: 0 }
         const serverStatus = { RUNNING: 0, STOPPED: 0, MAINTENANCE: 0 }

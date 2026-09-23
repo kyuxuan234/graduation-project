@@ -104,8 +104,8 @@ public class DeployController {
      * 开始部署
      */
     @PutMapping("/startDeploy/{id}")
-    public Result<Void> startDeploy(@PathVariable Integer id) {
-        deployExecutionService.startDeployEntry(id);
+    public Result<Void> startDeploy(@PathVariable Integer id, @RequestParam String executeMode) {
+        deployExecutionService.startDeployEntry(id, executeMode);
         return Result.success();
     }
 

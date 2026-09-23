@@ -13,6 +13,7 @@ import com.example.exception.BusinessException;
 import com.example.service.AdminService;
 import com.example.service.DevService;
 import com.example.service.OpsService;
+import com.example.utils.TokenUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -72,8 +73,8 @@ public class JwtInterceptor implements HandlerInterceptor {
             throw new BusinessException(ResultCodeEnum.USER_NOT_EXIST_ERROR);
         }
         try {
-            // 用户密码加签验证 token
-            JWTVerifier jwtVerifier = JWT.require(Algorithm.HMAC256(account.getPassword())).build();
+            // 使用配置的 jwt.secret 验签（与 TokenUtils.createToken 一致）
+            JWTVerifier jwtVerifier = JWT.require(Algorithm.HMAC256(TokenUtils.jwtSecret())).build();
             jwtVerifier.verify(token); // 验证token
         } catch (JWTVerificationException e) {
             throw new BusinessException(ResultCodeEnum.TOKEN_CHECK_ERROR);

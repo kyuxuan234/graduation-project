@@ -94,7 +94,7 @@ const ALL_MENUS = [
     index: 'ops', name: '运维管理', icon: 'el-icon-s-operation',
     children: [
       { index: '/project', name: '项目管理', icon: 'el-icon-folder', roles: ['ADMIN', 'DEV'] },
-      { index: '/server', name: '服务器管理', icon: 'el-icon-monitor', roles: ['ADMIN', 'DEV', 'OPS'] },
+      { index: '/server', name: '服务器管理', icon: 'el-icon-monitor', roles: ['ADMIN', 'OPS'] },
       { index: '/app', name: '应用管理', icon: 'el-icon-s-platform', roles: ['ADMIN', 'DEV', 'OPS'] },
       { index: '/deploy', name: '部署管理', icon: 'el-icon-s-promotion', roles: ['ADMIN', 'DEV', 'OPS'] },
       { index: '/alarm', name: '告警管理', icon: 'el-icon-warning-outline', roles: ['ADMIN', 'DEV', 'OPS'] },

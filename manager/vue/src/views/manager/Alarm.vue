@@ -88,13 +88,15 @@
           </template>
         </el-table-column>
 
-        <el-table-column label="操作" align="center" width="180">
+        <el-table-column label="操作" align="center" width="172" fixed="right">
+          <template slot="header"><span class="th-label"><i class="el-icon-s-operation"></i>操作</span></template>
           <template v-slot="scope">
             <div class="op-btns">
-              <el-button v-if="canHandle(scope.row)" type="text" class="op-warn" @click="handle(scope.row.id)">接手</el-button>
-              <el-button v-if="canResolve(scope.row)" type="text" class="op-ok" @click="resolve(scope.row.id)">解决</el-button>
-              <el-button v-if="canEdit(scope.row)" type="text" class="op-primary" @click="handleEdit(scope.row)">编辑</el-button>
-              <el-button v-if="canDelete(scope.row)" type="text" class="op-danger" @click="del(scope.row.id)">删除</el-button>
+              <el-button v-if="canHandle(scope.row)" type="warning" size="mini" icon="el-icon-user" title="接手" @click="handle(scope.row.id)">接手</el-button>
+              <el-button v-if="canResolve(scope.row)" type="success" size="mini" icon="el-icon-circle-check" title="解决" @click="resolve(scope.row.id)">解决</el-button>
+              <el-button v-if="canEdit(scope.row)" type="primary" size="mini" icon="el-icon-edit" title="编辑" @click="handleEdit(scope.row)">编辑</el-button>
+              <el-button v-else type="info" size="mini" icon="el-icon-view" title="查看" @click="handleView(scope.row)">查看</el-button>
+              <el-button v-if="canDelete(scope.row)" type="danger" size="mini" icon="el-icon-delete" title="删除" @click="del(scope.row.id)">删除</el-button>
             </div>
           </template>
         </el-table-column>
@@ -113,8 +115,8 @@
       </div>
     </div>
 
-    <el-dialog title="告警信息" :visible.sync="fromVisible" width="40%" :close-on-click-modal="false" destroy-on-close>
-      <el-form :model="form" label-width="100px" style="padding-right: 50px" :rules="rules" ref="formRef">
+    <el-dialog :title="formReadonly ? '查看告警' : '告警信息'" :visible.sync="fromVisible" width="40%" :close-on-click-modal="false" destroy-on-close>
+      <el-form :model="form" label-width="100px" style="padding-right: 50px" :rules="rules" ref="formRef" :disabled="formReadonly">
         <el-form-item label="应用" prop="appId">
           <el-select v-model="form.appId" placeholder="请选择应用" style="width: 100%" @change="handleAppChange">
             <el-option v-for="item in appList" :key="item.id" :label="item.name + '（' + item.code + '）'" :value="item.id"></el-option>
@@ -136,8 +138,8 @@
         </el-form-item>
       </el-form>
       <div slot="footer" class="dialog-footer">
-        <el-button @click="fromVisible = false" icon="el-icon-close">取 消</el-button>
-        <el-button type="primary" @click="save" icon="el-icon-check">确 定</el-button>
+        <el-button @click="fromVisible = false" icon="el-icon-close">{{ formReadonly ? '关 闭' : '取 消' }}</el-button>
+        <el-button v-if="!formReadonly" type="primary" @click="save" icon="el-icon-check">确 定</el-button>
       </div>
     </el-dialog>
 
@@ -160,6 +162,7 @@ export default {
       params: { alarmNo: null, level: null, status: null, appId: null, serverId: null },   // 搜索条件
       dateRange: [],   // 告警时间范围
       fromVisible: false,
+      formReadonly: false,
       form: {},
       appList: [],      // 应用下拉数据源
       serverList: [],   // 服务器下拉数据源
@@ -238,6 +241,10 @@ export default {
       this.$router.push({ path: '/app', query: { id: row.appId } })
     },
     goServer(row) {
+      if (!canOps(this.user)) {
+        this.$message.info('服务器由运维管理')
+        return
+      }
       this.$router.push({ path: '/server', query: { id: row.serverId } })
     },
     loadApp() {   // 预加载应用下拉数据源
@@ -257,12 +264,19 @@ export default {
       }
     },
     handleAdd() {   // 登记告警
+      this.formReadonly = false
       this.form = { level: 'WARNING', status: 'UNHANDLED' }
       this.fromVisible = true
     },
     handleEdit(row) {   // 编辑数据
+      this.formReadonly = false
       this.form = JSON.parse(JSON.stringify(row))  // 给form对象赋值  注意要深拷贝数据
       this.fromVisible = true   // 打开弹窗
+    },
+    handleView(row) {   // 处理中/已解决或无权限：只读查看
+      this.formReadonly = true
+      this.form = JSON.parse(JSON.stringify(row))
+      this.fromVisible = true
     },
     save() {   // 保存按钮触发的逻辑  它会触发新增或者更新
       this.$refs.formRef.validate((valid) => {

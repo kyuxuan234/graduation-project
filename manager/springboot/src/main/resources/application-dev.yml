@@ -11,5 +11,8 @@ spring:
 credential:
   key: ${CREDENTIAL_KEY:dev-credential-key}
 
+jwt:
+  secret: ${JWT_SECRET:devops-jwt-local-secret-2026}
+
 healthcheck:
   enabled: false

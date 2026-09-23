@@ -20,6 +20,8 @@ public class Deploy implements Serializable {
     private String version;
     /** 类型：FULL-全量 INCREMENT-增量 ROLLBACK-回滚 */
     private String deployType;
+    /** 执行方式：AUTO-自动SSH MANUAL-人工确认 */
+    private String executeMode;
     /** 状态：PENDING-待审批 APPROVED-已批准 REJECTED-已驳回 DEPLOYING-部署中 SUCCESS-成功 FAILED-失败 */
     private String status;
     /** 申请人 */
@@ -109,6 +111,14 @@ public class Deploy implements Serializable {
 
     public void setDeployType(String deployType) {
         this.deployType = deployType;
+    }
+
+    public String getExecuteMode() {
+        return executeMode;
+    }
+
+    public void setExecuteMode(String executeMode) {
+        this.executeMode = executeMode;
     }
 
     public String getStatus() {

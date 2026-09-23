@@ -49,6 +49,10 @@ file:
 credential:
   key: ${CREDENTIAL_KEY:}
 
+# JWT 签名密钥。不要再用用户密码哈希当密钥：BCrypt 密文含 $ 且与查询路径不一致时会导致登录后全部 401。
+jwt:
+  secret: ${JWT_SECRET:devops-jwt-local-secret-2026}
+
 deploy:
   execution:
     pool-size: 2

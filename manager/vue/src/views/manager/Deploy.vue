@@ -20,11 +20,13 @@
       </div>
       <div class="toolbar-actions" v-if="canDev(user)">
         <el-button type="primary" plain @click="handleApply" icon="el-icon-s-promotion">发起部署申请</el-button>
+        <el-button type="danger" plain @click="delBatch" icon="el-icon-delete">批量删除</el-button>
       </div>
     </div>
 
     <div class="table">
-      <el-table :data="tableData" stripe size="small">
+      <el-table :data="tableData" stripe size="small" @selection-change="handleSelectionChange">
+        <el-table-column v-if="canDev(user)" type="selection" width="48" align="center" :selectable="canEditDeploy"></el-table-column>
         <el-table-column label="部署单号" width="190">
           <template slot="header"><span class="th-label"><i class="el-icon-tickets"></i>部署单号</span></template>
           <template v-slot="scope">
@@ -57,6 +59,16 @@
             <el-tag :type="scope.row.deployType === 'ROLLBACK' ? 'warning' : 'info'">
               <i :class="scope.row.deployType === 'ROLLBACK' ? 'el-icon-refresh-left' : 'el-icon-upload2'"></i>
               {{ typeNames[scope.row.deployType] || scope.row.deployType }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="执行方式" width="110" align="center">
+          <template slot="header"><span class="th-label"><i class="el-icon-set-up"></i>执行方式</span></template>
+          <template v-slot="scope">
+            <span v-if="!modeChosen(scope.row)" class="cell-text">-</span>
+            <el-tag v-else :type="scope.row.executeMode === 'MANUAL' ? 'warning' : ''">
+              <i :class="scope.row.executeMode === 'MANUAL' ? 'el-icon-edit-outline' : 'el-icon-cpu'"></i>
+              {{ modeNames[scope.row.executeMode] || '自动' }}
             </el-tag>
           </template>
         </el-table-column>
@@ -95,33 +107,10 @@
           </template>
         </el-table-column>
 
-        <el-table-column label="日志" align="center" width="150">
-          <template slot="header"><span class="th-label"><i class="el-icon-document"></i>日志</span></template>
+        <el-table-column label="部署" align="center" width="64" fixed="right">
+          <template slot="header"><span class="th-label"><i class="el-icon-s-promotion"></i>部署</span></template>
           <template v-slot="scope">
-            <el-button type="text" class="op-primary" @click="showLog(scope.row)">查看</el-button>
-            <el-button v-if="canExecLog(scope.row)" type="text" class="op-primary" @click="showExecLog(scope.row)">执行日志</el-button>
-          </template>
-        </el-table-column>
-        <el-table-column label="操作" align="center" width="160">
-          <template v-slot="scope">
-            <div class="op-btns">
-              <template v-if="scope.row.status === 'PENDING' && canOps(user)">
-                <el-button type="text" class="op-ok" @click="handleApprove(scope.row, 'APPROVED')">批准</el-button>
-                <el-button type="text" class="op-danger" @click="handleApprove(scope.row, 'REJECTED')">驳回</el-button>
-              </template>
-              <el-button v-if="scope.row.status === 'APPROVED' && canOps(user)"
-                         type="text" class="op-primary" @click="startDeploy(scope.row.id)">开始</el-button>
-              <template v-if="scope.row.status === 'DEPLOYING' && canOps(user)">
-                <el-button type="text" class="op-ok" @click="finishDeploy(scope.row.id, 'SUCCESS')">成功</el-button>
-                <el-button type="text" class="op-danger" @click="finishDeploy(scope.row.id, 'FAILED')">失败</el-button>
-              </template>
-              <el-button v-if="scope.row.status === 'SUCCESS' && canOps(user)"
-                         type="text" class="op-warn" @click="rollback(scope.row.id)">回滚</el-button>
-              <template v-if="canEditDeploy(scope.row)">
-                <el-button type="text" class="op-primary" @click="handleEdit(scope.row)">编辑</el-button>
-                <el-button type="text" class="op-danger" @click="del(scope.row.id)">删除</el-button>
-              </template>
-            </div>
+            <el-button class="op-icon-btn" type="primary" size="mini" icon="el-icon-s-promotion" title="部署" @click="openAction(scope.row)">部署</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -177,20 +166,89 @@
       </div>
     </el-dialog>
 
-    <!--  审批  -->
-    <el-dialog :title="approveForm.result === 'APPROVED' ? '批准部署' : '驳回部署'" :visible.sync="approveVisible"
-               width="35%" :close-on-click-modal="false" destroy-on-close>
-      <el-form label-width="100px" style="padding-right: 50px">
-        <el-form-item label="部署单号">
-          <span>{{ approveForm.deployNo }}</span>
-        </el-form-item>
-        <el-form-item label="审批备注">
-          <el-input type="textarea" :rows="4" v-model="approveForm.remark" placeholder="审批备注"></el-input>
-        </el-form-item>
-      </el-form>
+    <el-dialog :visible.sync="actionVisible" :width="actionScene === 'manual' ? '780px' : '520px'"
+               :fullscreen="actionScene === 'manual' && sshLarge" :close-on-click-modal="false"
+               custom-class="deploy-action-dialog" @opened="onActionOpened" @closed="onActionClosed">
+      <div slot="title" class="action-title-bar">
+        <span>{{ actionTitle }}</span>
+        <el-button v-if="actionScene === 'manual'" type="primary" size="mini" plain
+                   :icon="sshLarge ? 'el-icon-copy-document' : 'el-icon-full-screen'"
+                   @click="toggleSshLarge">{{ sshLarge ? '还原窗口' : '放大窗口' }}</el-button>
+      </div>
+      <div class="action-meta" v-if="actionRow">
+        <el-tag size="mini" :type="roleTag(user.username, user.role)">{{ personRoleName(user.username, user.role) }}</el-tag>
+        <el-tag size="mini" :type="statusTag[actionRow.status]"><i :class="statusIcon[actionRow.status]"></i>{{ statusNames[actionRow.status] }}</el-tag>
+        <span>{{ actionRow.appName || '-' }} · {{ actionRow.serverName || '-' }} · {{ actionRow.version || '-' }}</span>
+      </div>
+
+      <div v-if="actionScene === 'approve'">
+        <el-form label-width="90px">
+          <el-form-item label="审批结果">
+            <el-radio-group v-model="approveForm.result">
+              <el-radio label="APPROVED">批准</el-radio>
+              <el-radio label="REJECTED">驳回</el-radio>
+            </el-radio-group>
+          </el-form-item>
+          <el-form-item label="审批备注">
+            <el-input type="textarea" :rows="4" v-model="approveForm.remark" placeholder="审批备注"></el-input>
+          </el-form-item>
+        </el-form>
+      </div>
+
+      <div v-else-if="actionScene === 'edit'">
+        <p class="action-tip">这是你提交的待审批申请，可以修改内容或删除。</p>
+      </div>
+
+      <div v-else-if="actionScene === 'start'">
+        <el-form label-width="90px">
+          <el-form-item label="执行方式">
+            <el-radio-group v-model="startForm.executeMode">
+              <el-radio label="AUTO">自动部署</el-radio>
+              <el-radio label="MANUAL">手动部署</el-radio>
+            </el-radio-group>
+          </el-form-item>
+        </el-form>
+        <p class="action-tip">自动部署通过 SSH 执行脚本，需要已上传制品。手动部署会在这个窗口里打开终端，操作完成后再标记结果。</p>
+      </div>
+
+      <div v-else-if="actionScene === 'manual'">
+        <p class="action-tip">点击黑色窗口后直接输入，回车执行。可用标题栏「放大窗口」铺满屏幕。</p>
+        <div class="ssh-screen" :class="{ 'ssh-screen-large': sshLarge }" ref="sshScreen" tabindex="0" @keydown="onSshKey" @paste="onSshPaste" @click="focusSsh">{{ sshText || '正在连接…' }}<span v-if="sshReady" class="ssh-caret"></span></div>
+      </div>
+
+      <div v-else-if="actionScene === 'auto'">
+        <p class="action-tip">自动部署正在目标机执行脚本。可以查看执行日志，确认结束后标记成功或失败。</p>
+      </div>
+
+      <div v-else-if="actionScene === 'rollback'">
+        <p class="action-tip">回滚后这张部署单会重新进入部署中，并按原来的执行方式处理。</p>
+      </div>
+
+      <div v-else>
+        <p class="action-tip">当前身份下可以查看这张部署单的记录。</p>
+      </div>
+
       <div slot="footer" class="dialog-footer">
-        <el-button @click="approveVisible = false" icon="el-icon-close">取 消</el-button>
-        <el-button type="primary" @click="submitApprove" icon="el-icon-check">确 定</el-button>
+        <el-button icon="el-icon-document" @click="showLog(actionRow)">流转日志</el-button>
+        <el-button v-if="canExecLog(actionRow)" icon="el-icon-tickets" @click="showExecLog(actionRow)">执行日志</el-button>
+        <template v-if="actionScene === 'approve'">
+          <el-button v-if="canEditDeploy(actionRow)" icon="el-icon-edit" @click="editFromAction">修改申请</el-button>
+          <el-button type="primary" icon="el-icon-check" @click="submitApprove">提交审批</el-button>
+        </template>
+        <template v-else-if="actionScene === 'edit'">
+          <el-button type="primary" icon="el-icon-edit" @click="editFromAction">编辑</el-button>
+          <el-button type="danger" icon="el-icon-delete" @click="del(actionRow.id)">删除</el-button>
+        </template>
+        <template v-else-if="actionScene === 'start'">
+          <el-button type="primary" icon="el-icon-video-play" @click="confirmStart">开始部署</el-button>
+        </template>
+        <template v-else-if="actionScene === 'manual' || actionScene === 'auto'">
+          <el-button type="success" icon="el-icon-circle-check" @click="finishDeploy(actionRow.id, 'SUCCESS')">成功</el-button>
+          <el-button type="danger" icon="el-icon-circle-close" @click="finishDeploy(actionRow.id, 'FAILED')">失败</el-button>
+        </template>
+        <template v-else-if="actionScene === 'rollback'">
+          <el-button type="warning" icon="el-icon-refresh-left" @click="rollback(actionRow.id)">确认回滚</el-button>
+        </template>
       </div>
     </el-dialog>
 
@@ -237,12 +295,21 @@ export default {
       pageSize: 20,  // 每页显示的个数
       total: 0,
       params: { id: null, deployNo: null, status: null, applicant: null, appId: null, serverId: null },   // 搜索条件
+      ids: [],
       finished: false,
       dateRange: [],   // 申请时间范围
       fromVisible: false,
       form: {},
-      approveVisible: false,
       approveForm: {},
+      startForm: { executeMode: 'AUTO' },
+      actionVisible: false,
+      actionScene: 'view',
+      actionRow: null,
+      sshRow: null,
+      sshText: '',
+      sshSocket: null,
+      sshReady: false,
+      sshLarge: false,
       logVisible: false,
       logData: [],
       execVisible: false,
@@ -282,6 +349,7 @@ export default {
         REJECTED: 'el-icon-close', FAILED: 'el-icon-circle-close', SUCCESS: 'el-icon-circle-check'
       },
       typeNames: { FULL: '全量', INCREMENT: '增量', ROLLBACK: '回滚' },
+      modeNames: { AUTO: '自动', MANUAL: '手动' },
       actionNames: {
         APPLY: '提交申请', APPROVE: '审批通过', REJECT: '审批驳回',
         START_DEPLOY: '开始部署', FINISH: '部署成功', FAIL: '部署失败', ROLLBACK: '回滚'
@@ -310,6 +378,21 @@ export default {
       const user = JSON.parse(localStorage.getItem('xm-user') || '{}')
       return { token: user.token || '' }
     },
+    actionTitle() {
+      const row = this.actionRow
+      const no = row && row.deployNo ? row.deployNo : ''
+      const names = {
+        approve: '审批部署',
+        edit: '修改申请',
+        start: '开始部署',
+        manual: '手动部署',
+        auto: '自动部署',
+        rollback: '回滚部署',
+        view: '部署详情'
+      }
+      const name = names[this.actionScene] || '操作'
+      return no ? name + ' · ' + no : name
+    },
     deployHint() {
       if (this.params.id) return '当前按关联部署单定位'
       if (this.params.appId) return '当前查看该应用的部署单'
@@ -327,6 +410,7 @@ export default {
   },
   beforeDestroy() {
     this.closeExecTimer()
+    this.closeSsh()
   },
     watch: {
     '$route.fullPath'() {
@@ -340,6 +424,9 @@ export default {
     roleTag,
     canDev,
     canOps,
+    modeChosen(row) {
+      return row && (row.status === 'DEPLOYING' || row.status === 'SUCCESS' || row.status === 'FAILED')
+    },
     canEditDeploy(row) {
       if (row.status !== 'PENDING') return false
       if (isAdmin(this.user)) return true
@@ -357,6 +444,10 @@ export default {
       this.$router.push({ path: '/app', query: { id: row.appId } })
     },
     goServer(row) {
+      if (!canOps(this.user)) {
+        this.$message.info('服务器由运维管理')
+        return
+      }
       this.$router.push({ path: '/server', query: { id: row.serverId } })
     },
     goAlarms(row) {
@@ -432,11 +523,10 @@ export default {
         }
       })
     },
-    handleApprove(row, result) {   // 打开审批弹窗
-      this.approveForm = { id: row.id, deployNo: row.deployNo, result: result, remark: null }
-      this.approveVisible = true
+    handleApprove(row, result) {
+      this.approveForm = { id: row.id, deployNo: row.deployNo, result: result, remark: '' }
     },
-    submitApprove() {   // 提交审批结果
+    submitApprove() {
       this.$request({
         url: '/deploy/approve/' + this.approveForm.id,
         method: 'PUT',
@@ -444,22 +534,145 @@ export default {
       }).then(res => {
         if (res.code === '200') {
           this.$message.success('操作成功')
+          this.actionVisible = false
           this.load(this.pageNum)
-          this.approveVisible = false
         } else {
           this.$message.error(res.msg)
         }
       })
     },
-    startDeploy(id) {   // 开始部署
-      this.$request.put('/deploy/startDeploy/' + id).then(res => {
+    sceneOf(row) {
+      if (canOps(this.user) && row.status === 'PENDING') return 'approve'
+      if (this.canEditDeploy(row)) return 'edit'
+      if (canOps(this.user) && row.status === 'APPROVED') return 'start'
+      if (canOps(this.user) && row.status === 'DEPLOYING' && row.executeMode === 'MANUAL') return 'manual'
+      if (canOps(this.user) && row.status === 'DEPLOYING') return 'auto'
+      if (canOps(this.user) && row.status === 'SUCCESS') return 'rollback'
+      return 'view'
+    },
+    openAction(row) {
+      this.actionRow = row
+      this.actionScene = this.sceneOf(row)
+      this.sshLarge = false
+      if (this.actionScene === 'approve') {
+        this.handleApprove(row, 'APPROVED')
+      }
+      if (this.actionScene === 'start') {
+        this.startForm = { id: row.id, deployNo: row.deployNo, serverName: row.serverName, executeMode: 'AUTO' }
+      }
+      this.actionVisible = true
+    },
+    onActionOpened() {
+      if (this.actionScene === 'manual') {
+        this.openSsh(this.actionRow)
+      }
+    },
+    onActionClosed() {
+      this.sshLarge = false
+      this.closeSsh()
+    },
+    editFromAction() {
+      const row = this.actionRow
+      this.actionVisible = false
+      this.handleEdit(row)
+    },
+    toggleSshLarge() {
+      this.sshLarge = !this.sshLarge
+      this.$nextTick(() => this.focusSsh())
+    },
+    focusSsh() {
+      if (this.$refs.sshScreen) this.$refs.sshScreen.focus()
+    },
+    confirmStart() {
+      const manual = this.startForm.executeMode === 'MANUAL'
+      this.$request.put('/deploy/startDeploy/' + this.startForm.id, null, {
+        params: { executeMode: this.startForm.executeMode }
+      }).then(res => {
         if (res.code === '200') {
-          this.$message.success('操作成功')
+          this.$message.success(manual ? '已进入手动部署' : '已开始自动部署')
+          const row = Object.assign({}, this.actionRow, {
+            id: this.startForm.id,
+            deployNo: this.startForm.deployNo,
+            serverName: this.startForm.serverName,
+            executeMode: this.startForm.executeMode,
+            status: 'DEPLOYING'
+          })
+          this.actionRow = row
           this.load(this.pageNum)
+          if (manual) {
+            this.actionScene = 'manual'
+            this.$nextTick(() => this.openSsh(row))
+          } else {
+            this.actionScene = 'auto'
+          }
         } else {
           this.$message.error(res.msg)
         }
       })
+    },
+    openSsh(row) {
+      this.closeSsh()
+      this.sshRow = row
+      this.sshText = ''
+      this.sshReady = false
+      this.$nextTick(() => this.connectSsh())
+    },
+    connectSsh() {
+      const user = JSON.parse(localStorage.getItem('xm-user') || '{}')
+      const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+      const url = proto + '//' + window.location.host + '/api/ssh/terminal?deployId=' + this.sshRow.id + '&token=' + encodeURIComponent(user.token || '')
+      const socket = new WebSocket(url)
+      this.sshSocket = socket
+      socket.onopen = () => {
+        this.sshReady = true
+        this.$nextTick(() => this.focusSsh())
+      }
+      socket.onmessage = (event) => {
+        this.sshText += event.data
+        if (this.sshText.length > 200000) {
+          this.sshText = this.sshText.slice(-100000)
+        }
+        this.$nextTick(() => {
+          const screen = this.$refs.sshScreen
+          if (screen) screen.scrollTop = screen.scrollHeight
+        })
+      }
+      socket.onerror = () => {
+        this.sshReady = false
+        this.sshText += '\n连接失败\n'
+      }
+      socket.onclose = () => {
+        this.sshReady = false
+        if (this.sshText && !this.sshText.endsWith('连接已断开\n')) {
+          this.sshText += '\n连接已断开\n'
+        }
+      }
+    },
+    onSshKey(event) {
+      if (!this.sshReady || !this.sshSocket || this.sshSocket.readyState !== 1 || event.isComposing) return
+      let data = null
+      if (event.ctrlKey && event.key === 'c') data = '\u0003'
+      else if (event.key === 'Enter') data = '\r'
+      else if (event.key === 'Backspace') data = '\u007f'
+      else if (event.key === 'Tab') data = '\t'
+      else if (!event.ctrlKey && !event.altKey && !event.metaKey && event.key && event.key.length === 1) data = event.key
+      if (data == null) return
+      this.sshSocket.send(data)
+      event.preventDefault()
+    },
+    onSshPaste(event) {
+      if (!this.sshReady || !this.sshSocket || this.sshSocket.readyState !== 1) return
+      const text = event.clipboardData ? event.clipboardData.getData('text') : ''
+      if (text) this.sshSocket.send(text.replace(/\r?\n/g, '\r'))
+      event.preventDefault()
+    },
+    closeSsh() {
+      this.sshReady = false
+      if (this.sshSocket) {
+        this.sshSocket.onclose = null
+        this.sshSocket.close()
+        this.sshSocket = null
+      }
     },
     finishDeploy(id, result) {   // 部署完成
       this.$request({
@@ -469,6 +682,7 @@ export default {
       }).then(res => {
         if (res.code === '200') {
           this.$message.success('操作成功')
+          this.actionVisible = false
           this.load(this.pageNum)
         } else {
           this.$message.error(res.msg)
@@ -480,6 +694,7 @@ export default {
         this.$request.put('/deploy/rollback/' + id).then(res => {
           if (res.code === '200') {
             this.$message.success('操作成功')
+            this.actionVisible = false
             this.load(this.pageNum)
           } else {
             this.$message.error(res.msg)
@@ -543,11 +758,32 @@ export default {
         this.logVisible = true
       })
     },
+    handleSelectionChange(rows) {
+      this.ids = rows.map(v => v.id)
+    },
+    delBatch() {
+      if (!this.ids.length) {
+        this.$message.warning('请选择数据')
+        return
+      }
+      this.$confirm('您确定批量删除这些数据吗？', '确认删除', {type: "warning"}).then(response => {
+        this.$request.delete('/deploy/delete/batch', {data: this.ids}).then(res => {
+          if (res.code === '200') {
+            this.$message.success('操作成功')
+            this.load(1)
+          } else {
+            this.$message.error(res.msg)
+          }
+        })
+      }).catch(() => {
+      })
+    },
     del(id) {   // 单个删除
       this.$confirm('您确定删除吗？', '确认删除', {type: "warning"}).then(response => {
         this.$request.delete('/deploy/delete/' + id).then(res => {
           if (res.code === '200') {   // 表示操作成功
             this.$message.success('操作成功')
+            this.actionVisible = false
             this.load(1)
           } else {
             this.$message.error(res.msg)  // 弹出错误的信息
@@ -601,4 +837,63 @@ export default {
 </script>
 
 <style scoped>
+.action-title-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-right: 36px;
+  gap: 12px;
+}
+.action-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 16px;
+  padding: 10px 12px;
+  color: #5b6472;
+  background: #f7f9fc;
+  border: 1px solid #eef2f7;
+  border-radius: 8px;
+}
+.action-tip {
+  margin: 0 0 10px;
+  color: #86909c;
+  font-size: 13px;
+  line-height: 1.6;
+}
+.ssh-screen {
+  background: #0b1218;
+  color: #d6e2ee;
+  font-family: Consolas, "SF Mono", Monaco, monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  height: 420px;
+  overflow: auto;
+  padding: 14px;
+  border-radius: 8px;
+  border: 1px solid #1a2430;
+  white-space: pre-wrap;
+  word-break: break-all;
+  cursor: text;
+  outline: none;
+}
+.ssh-screen:focus {
+  box-shadow: inset 0 0 0 1px #3b7cff;
+}
+.ssh-screen-large {
+  height: calc(100vh - 210px);
+}
+.ssh-caret {
+  display: inline-block;
+  width: 8px;
+  height: 1em;
+  margin-left: 2px;
+  background: #d6e2ee;
+  vertical-align: text-bottom;
+  animation: ssh-blink 1s step-end infinite;
+}
+@keyframes ssh-blink {
+  50% { opacity: 0; }
+}
 </style>

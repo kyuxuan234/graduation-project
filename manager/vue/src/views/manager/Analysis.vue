@@ -299,25 +299,32 @@ export default {
 .toolbar {
   display: flex;
   align-items: center;
-  gap: 16px;
-  margin-bottom: 12px;
+  flex-wrap: wrap;
+  gap: 12px 16px;
+  margin-bottom: 14px;
+  padding: 14px 16px;
+  background: #fff;
+  border: 1px solid #e9eef5;
+  border-radius: 12px;
+  box-shadow: 0 6px 18px rgba(31, 42, 68, 0.05);
 }
 .page-note {
   margin: 0;
-  color: #909399;
+  color: #86909c;
   font-size: 13px;
   line-height: 1.5;
 }
 .charts {
   display: grid;
   grid-template-columns: 1.05fr 0.95fr;
-  gap: 12px;
+  gap: 14px;
 }
 .panel {
   background: #fff;
-  border: 1px solid #ebeef5;
-  border-radius: 8px;
-  padding: 12px 14px 8px;
+  border: 1px solid #e9eef5;
+  border-radius: 12px;
+  padding: 14px 16px 10px;
+  box-shadow: 0 6px 18px rgba(31, 42, 68, 0.05);
 }
 .panel-wide {
   grid-column: 1 / -1;
@@ -326,27 +333,30 @@ export default {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  min-height: 28px;
+  min-height: 32px;
   gap: 12px;
+  margin-bottom: 4px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #f0f3f8;
 }
 .panel header.is-center {
   justify-content: center;
 }
 .panel h3 {
   margin: 0;
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 600;
-  color: #303133;
+  color: #1f2a44;
 }
 .hint {
-  color: #909399;
+  color: #86909c;
   font-size: 12px;
 }
 .plot {
-  height: 260px;
+  height: 300px;
 }
 .plot-tall {
-  height: 280px;
+  height: 340px;
 }
 @media (max-width: 1100px) {
   .toolbar {

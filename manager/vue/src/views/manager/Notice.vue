@@ -21,11 +21,12 @@
         <el-table-column prop="time" label="创建时间"></el-table-column>
         <el-table-column prop="user" label="创建人"></el-table-column>
 
-        <el-table-column label="操作" width="180" align="center">
+        <el-table-column label="操作" width="100" align="center" fixed="right">
+          <template slot="header"><span class="th-label"><i class="el-icon-s-operation"></i>操作</span></template>
           <template v-slot="scope">
             <div class="op-btns">
-              <el-button type="text" class="op-primary" @click="handleEdit(scope.row)">编辑</el-button>
-              <el-button type="text" class="op-danger" @click="del(scope.row.id)">删除</el-button>
+              <el-button type="primary" size="mini" icon="el-icon-edit" title="编辑" @click="handleEdit(scope.row)">编辑</el-button>
+              <el-button type="danger" size="mini" icon="el-icon-delete" title="删除" @click="del(scope.row.id)">删除</el-button>
             </div>
           </template>
         </el-table-column>

@@ -91,11 +91,12 @@
           </template>
         </el-table-column>
 
-        <el-table-column label="操作" align="center" width="200">
+        <el-table-column label="操作" align="center" width="100" fixed="right">
+          <template slot="header"><span class="th-label"><i class="el-icon-s-operation"></i>操作</span></template>
           <template v-slot="scope">
             <div class="op-btns">
-              <el-button type="text" class="op-primary" :disabled="!canEdit(scope.row)" @click="handleEdit(scope.row)">编辑</el-button>
-              <el-button type="text" class="op-danger" :disabled="!canDelete(scope.row)" @click="del(scope.row.id)">删除</el-button>
+              <el-button type="primary" size="mini" icon="el-icon-edit" title="编辑" :disabled="!canEdit(scope.row)" @click="handleEdit(scope.row)">编辑</el-button>
+              <el-button type="danger" size="mini" icon="el-icon-delete" title="删除" :disabled="!canDelete(scope.row)" @click="del(scope.row.id)">删除</el-button>
             </div>
           </template>
         </el-table-column>
@@ -152,17 +153,9 @@
         <el-form-item label="SSH 用户" prop="sshUser">
           <el-input v-model="form.sshUser" placeholder="登录用户名"></el-input>
         </el-form-item>
-        <el-form-item label="认证方式" prop="sshAuthType">
-          <el-select v-model="form.sshAuthType" placeholder="请选择" style="width: 100%">
-            <el-option label="密码" value="PASSWORD"></el-option>
-            <el-option label="私钥" value="KEY"></el-option>
-          </el-select>
-        </el-form-item>
-        <el-form-item label="SSH 密码" prop="sshPassword" v-if="form.sshAuthType !== 'KEY'">
+        <el-form-item label="SSH 密码" prop="sshPassword">
           <el-input v-model="form.sshPassword" show-password placeholder="留空则不修改"></el-input>
-        </el-form-item>
-        <el-form-item label="SSH 私钥" prop="sshPrivateKey" v-else>
-          <el-input type="textarea" :rows="4" v-model="form.sshPrivateKey" placeholder="留空则不修改"></el-input>
+          <div style="color: #909399; font-size: 12px; line-height: 1.5; margin-top: 6px">登记密码。保存时用这个密码登录一次，生成私钥放到目标机，之后登录都用这把私钥。</div>
         </el-form-item>
         <el-form-item label="部署目录" prop="deployPath">
           <el-input v-model="form.deployPath" placeholder="如 /opt/apps"></el-input>
@@ -257,7 +250,7 @@ export default {
       return row.status !== 'STOPPED' && row.status !== 'MAINTENANCE'
     },
     handleAdd() {   // 新增数据
-      this.form = { status: 'RUNNING', sshPort: 22, sshAuthType: 'PASSWORD' }
+      this.form = { status: 'RUNNING', sshPort: 22 }
       this.fromVisible = true   // 打开弹窗
     },
     handleEdit(row) {   // 编辑数据
@@ -267,10 +260,13 @@ export default {
     save() {   // 保存按钮触发的逻辑  它会触发新增或者更新
       this.$refs.formRef.validate((valid) => {
         if (valid) {
+          const data = JSON.parse(JSON.stringify(this.form))
+          delete data.sshAuthType
+          delete data.sshPrivateKey
           this.$request({
             url: this.form.id ? '/server/update' : '/server/add',
             method: this.form.id ? 'PUT' : 'POST',
-            data: this.form
+            data: data
           }).then(res => {
             if (res.code === '200') {  // 表示成功保存
               this.$message.success('保存成功')

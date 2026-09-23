@@ -46,7 +46,7 @@ MyBatis Mapper  ↔  MySQL manager
 ```
 
 - 前端直连 `http://localhost:9090`（`.env.development`），不做 webpack 代理；后端 `CorsFilter` 放行跨域。
-- JWT 放在请求头 `token`，签名密钥是当前用户的密码哈希，改密后旧 token 立即失效，有效期 2 小时。
+- JWT 放在请求头 `token`，签名密钥为配置项 `jwt.secret`（本地见 `application-dev.yml`，生产见环境变量 `JWT_SECRET`），有效期 2 小时。
 - 登录按 `admin` → `dev` → `ops` 三张账号表解析角色；密码为 `MD5(明文 + devops_salt_2026)`。
 
 ### 资产闭环（以应用为枢纽）
@@ -54,7 +54,7 @@ MyBatis Mapper  ↔  MySQL manager
 ```
 project ──► app ◄── server
               │
-              ├── deploy ──► deploy_log
+              ├── deploy ──► deploy_log / deploy_execution / deploy_artifact
               └── alarm
 ```
 
@@ -65,14 +65,14 @@ project ──► app ◄── server
 | 角色 | 账号表 | 能做什么 |
 |---|---|---|
 | ADMIN | `admin` | 全量菜单；绕过 `AuthUtils.requireRole`；管开发/运维/公告 |
-| DEV | `dev` | 发起部署申请；只能改自己的待审批单 |
-| OPS | `ops` | 审批、开始/结束部署、回滚；接手并闭环告警 |
+| DEV | `dev` | 发起部署申请；只能改自己的待审批单；可见项目 / 应用 / 部署 / 告警 / 分析 |
+| OPS | `ops` | 管服务器与 SSH 凭据；审批、开始/结束部署、回滚；接手并闭环告警 |
 
-侧边栏：所有人可见仪表盘 / 服务器 / 应用 / 部署 / 告警；ADMIN+DEV 可见项目；人员与公告仅 ADMIN。接口层再校验一次。
+侧边栏：仪表盘 / 应用 / 部署 / 告警 / 运维分析全员可见；**服务器仅 ADMIN+OPS**；项目 ADMIN+DEV；人员与公告仅 ADMIN。路由 `meta.roles` 与接口层再各卡一次。
 
 ### 主要页面
 
-`/dashboard` 仪表盘 · `/project` 项目 · `/server` 服务器 · `/app` 应用 · `/deploy` 部署（含流转日志） · `/alarm` 告警 · `/dev` `/ops` `/notice` · `/login` `/register`
+`/dashboard` · `/project` · `/server` · `/app` · `/deploy` · `/alarm` · `/analysis` · `/dev` `/ops` `/notice` · `/login` `/register`
 
 ---
 
@@ -112,9 +112,16 @@ SUCCESS ──回滚──► DEPLOYING（类型改为 ROLLBACK）──完成�
 
 业务表用 `deleted` 逻辑删，查询默认 `deleted = 0`。物理外键挡住误删有依赖的项目/服务器/应用。在线应用、进行中项目、停机/维护中的服务器等再加一层业务锁。
 
-### 5. 模拟发布，不接真实流水线
+### 5. 真实 SSH 部署（可选手动）
 
-没有 SSH / K8s / Jenkins。OPS 在页面上点「开始 / 成功 / 失败」推进状态，用来把审批、台账、告警、统计跑通，适合毕业设计演示。
+开始部署时选执行方式：
+
+| 模式 | 行为 |
+|---|---|
+| `AUTO` | 事务提交后异步 SSH 到目标机跑脚本，按退出码判成功/失败 |
+| `MANUAL` | 只进入「部署中」；页面可开 WebSocket 终端，运维自行操作后点成功/失败 |
+
+服务器保存时：用登记的 SSH 密码登录一次，在目标机写入公钥、本地密文保存私钥，之后探活与自动部署都走密钥（`ssh_auth_type=KEY`）。生产凭据用 `CREDENTIAL_KEY` 加密入库。内网 Docker 一键起见 `manager/DEPLOY.md`。
 
 ---
 
@@ -125,7 +132,7 @@ SUCCESS ──回滚──► DEPLOYING（类型改为 ROLLBACK）──完成�
 - JDK 8、Maven、Node.js / npm
 - MySQL 8（本机服务名一般是 `MySQL`，须处于 Running）
 
-`application.yml` 默认：库 `manager`，用户 `root` / `123456`。不一致就改这一处。
+`application-dev.yml` 默认：库 `manager`，用户 `root` / `123456`，以及本地 `jwt.secret`。不一致就改开发配置或环境变量。
 
 ### 建库（只做一次）
 
@@ -138,12 +145,12 @@ SOURCE manager/springboot/src/main/resources/sql/schema.sql;
 SOURCE manager/springboot/src/main/resources/sql/data.sql;
 ```
 
-已有旧库需要补外键、把明文密码刷成加盐 MD5、给 `alarm` 补 `deploy_no`、或给旧 `admin` 表补 `status` / `deleted` 时，再用同目录下的 `upgrade_fk.sql`、`upgrade_password.sql`、`upgrade_alarm.sql`、`upgrade_admin.sql`。
+已有旧库升级顺序见 `manager/springboot/src/main/resources/sql/README.md`（含 SSH、部署执行、制品、`execute_mode` 等 `upgrade_*.sql`）。全新安装不要再跑升级脚本。
 
-### 启动
+### 启动（本机 IDE / 命令行）
 
 ```bash
-# 后端
+# 后端（默认 spring.profiles.active=dev）
 cd manager/springboot
 mvn spring-boot:run
 
@@ -153,9 +160,11 @@ npm install
 npm run serve
 ```
 
-浏览器打开 [http://localhost:8080/](http://localhost:8080/)。后端健康检查：`http://localhost:9090/`。
+浏览器打开 [http://localhost:8080/](http://localhost:8080/)。后端健康检查：`http://localhost:9090/actuator/health`。
 
 MySQL 没开时，登录会报 JDBC `Communications link failure`。Windows 可先 `net start MySQL`（通常要管理员权限）。
+
+要用 Docker 起全栈（含 MySQL），看 `manager/DEPLOY.md`，不要和本机 MySQL 抢 3306。
 
 ### 演示账号
 
@@ -169,11 +178,11 @@ MySQL 没开时，登录会报 JDBC `Communications link failure`。Windows 可�
 
 ### 推荐演示路径
 
-1. **DEV** 登录 → 部署管理 → 发起申请（选应用、目标版本）。
-2. **OPS** 登录 → 审批通过 → 开始部署：应用变为「部署中」，版本仍是旧值。
-3. 点成功：应用「在线」，当前版本 = 目标版本；点失败：应用「离线」，不再显示在线。
-4. 成功单可回滚，应用再次进入「部署中」，再走一次完成。
-5. 告警管理：接手 → 解决，看仪表盘闭环率变化。
+1. **OPS**（或 ADMIN）→ 服务器管理：填好 SSH 用户/端口/登记密码/部署目录并保存，确认认证方式变为密钥。
+2. **DEV** → 部署管理 → 发起申请（选应用、目标版本）；制品需先上传（自动部署依赖制品）。
+3. **OPS** → 审批通过 → 开始部署，选「自动部署」：应用变为「部署中」，SSH 跑完后自动成功/失败并反写版本。
+4. 也可选「手动部署」：打开终端操作后，再点成功/失败。
+5. 成功单可回滚（自动模式同样走 SSH）。告警：接手 → 解决；运维分析页看统计。
 
 ### 常用接口
 
@@ -183,12 +192,12 @@ CRUD 统一：`POST /{模块}/add`、`PUT /update`、`DELETE /delete/{id}`、`GE
 |---|---|---|
 | POST | `/login` | 匿名 |
 | PUT | `/deploy/approve/{id}?result=APPROVED\|REJECTED` | OPS |
-| PUT | `/deploy/startDeploy/{id}` | OPS |
-| PUT | `/deploy/finishDeploy/{id}?result=SUCCESS\|FAILED` | OPS |
+| PUT | `/deploy/startDeploy/{id}?executeMode=AUTO\|MANUAL` | OPS |
+| PUT | `/deploy/finishDeploy/{id}?result=SUCCESS\|FAILED` | OPS（手动收尾） |
 | PUT | `/deploy/rollback/{id}` | OPS |
 | PUT | `/alarm/handle/{id}`、`/alarm/resolve/{id}` | OPS |
 
-统计：`/statistics/count`、`/deployTrend`、`/deployStatus`、`/alarmStatus`、`/appRisk`。
+统计与分析：`/statistics/*`（含部署趋势、告警状态、错误 TOP 等）。WebSocket 终端：`/ssh/{serverId}`。
 
 ### 自测
 
@@ -197,4 +206,4 @@ cd manager/springboot
 mvn test
 ```
 
-当前覆盖部署状态机合法/非法跳转。前端改完后用 `npm run serve` 看页面即可。
+当前覆盖部署状态机等。前端改完后用 `npm run serve` 看页面即可。

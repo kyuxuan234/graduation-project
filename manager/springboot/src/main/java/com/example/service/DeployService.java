@@ -3,9 +3,11 @@ package com.example.service;
 import cn.hutool.core.date.DateUtil;
 import cn.hutool.core.util.ObjectUtil;
 import cn.hutool.core.util.RandomUtil;
+import cn.hutool.core.util.StrUtil;
 import com.example.common.DeployStatusMachine;
 import com.example.common.enums.AppStatusEnum;
 import com.example.common.enums.DeployActionEnum;
+import com.example.common.enums.DeployExecuteModeEnum;
 import com.example.common.enums.DeployStatusEnum;
 import com.example.common.enums.DeployTypeEnum;
 import com.example.common.enums.ResultCodeEnum;
@@ -70,6 +72,7 @@ public class DeployService {
         if (ObjectUtil.isEmpty(deploy.getDeployType())) {
             deploy.setDeployType(DeployTypeEnum.FULL.name());
         }
+        deploy.setExecuteMode(normalizeExecuteMode(deploy.getExecuteMode()));
         if (ObjectUtil.isNull(deploy.getServerId())) {
             deploy.setServerId(dbApp.getServerId());
         }
@@ -88,20 +91,22 @@ public class DeployService {
         DeployStatusMachine.assertApprove(dbDeploy.getStatus(), result);
         boolean approved = DeployStatusEnum.APPROVED.name().equals(result);
 
-        Deploy updateDeploy = new Deploy();
-        updateDeploy.setId(id);
-        updateDeploy.setStatus(result);
-        updateDeploy.setApprover(currentUser.getUsername());
-        updateDeploy.setApproveTime(DateUtil.now());
-        updateDeploy.setRemark(remark);
-        deployMapper.updateById(updateDeploy);
+        // 状态与审批信息必须在同一条 CAS 语句里一次写完，被他人抢先变更则整体失败
+        String approver = currentUser.getUsername();
+        String approveTime = DateUtil.now();
+        int version = dbDeploy.getRowVersion() == null ? 0 : dbDeploy.getRowVersion();
+        int rows = deployMapper.casApprove(id, dbDeploy.getStatus(), version,
+                result, approver, approveTime, remark);
+        if (rows == 0) {
+            throw new BusinessException(ResultCodeEnum.DEPLOY_CONFLICT);
+        }
 
         DeployActionEnum action = approved ? DeployActionEnum.APPROVE : DeployActionEnum.REJECT;
         String detail = approved ? "审批通过" : "审批驳回";
         if (ObjectUtil.isNotEmpty(remark)) {
             detail = detail + "，意见：" + remark;
         }
-        saveLog(id, action, currentUser.getUsername(), detail);
+        saveLog(id, action, approver, detail);
     }
 
     /**
@@ -121,8 +126,11 @@ public class DeployService {
         updateApp.setStatus(AppStatusEnum.DEPLOYING.name());
         appMapper.updateById(updateApp);
 
-        saveLog(id, DeployActionEnum.START_DEPLOY, currentUser.getUsername(),
-                "开始部署，目标版本：" + dbDeploy.getVersion());
+        String startDetail = "开始部署，目标版本：" + dbDeploy.getVersion();
+        if (DeployExecuteModeEnum.MANUAL.name().equals(dbDeploy.getExecuteMode())) {
+            startDetail = startDetail + "，请在目标机操作后确认结果";
+        }
+        saveLog(id, DeployActionEnum.START_DEPLOY, currentUser.getUsername(), startDetail);
     }
 
     /**
@@ -191,8 +199,11 @@ public class DeployService {
         updateApp.setStatus(AppStatusEnum.DEPLOYING.name());
         appMapper.updateById(updateApp);
 
-        saveLog(id, DeployActionEnum.ROLLBACK, currentUser.getUsername(),
-                "发起回滚，目标版本：" + dbDeploy.getRollbackVersion());
+        String rollbackDetail = "发起回滚，目标版本：" + dbDeploy.getRollbackVersion();
+        if (DeployExecuteModeEnum.MANUAL.name().equals(dbDeploy.getExecuteMode())) {
+            rollbackDetail = rollbackDetail + "，请在目标机操作后确认结果";
+        }
+        saveLog(id, DeployActionEnum.ROLLBACK, currentUser.getUsername(), rollbackDetail);
     }
 
     /**
@@ -309,6 +320,9 @@ public class DeployService {
     public void updateById(Deploy deploy) {
         Deploy dbDeploy = getExistDeploy(deploy.getId());
         checkOwnPendingForDev(dbDeploy);
+        if (deploy.getExecuteMode() != null) {
+            deploy.setExecuteMode(normalizeExecuteMode(deploy.getExecuteMode()));
+        }
         deploy.setStatus(null);
         deploy.setApplicant(null);
         deploy.setApprover(null);
@@ -353,6 +367,16 @@ public class DeployService {
         PageHelper.startPage(pageNum, pageSize);
         List<Deploy> list = deployMapper.selectAll(deploy);
         return PageInfo.of(list);
+    }
+
+    private String normalizeExecuteMode(String mode) {
+        if (StrUtil.isBlank(mode)) {
+            return DeployExecuteModeEnum.AUTO.name();
+        }
+        if (DeployExecuteModeEnum.AUTO.name().equals(mode) || DeployExecuteModeEnum.MANUAL.name().equals(mode)) {
+            return mode;
+        }
+        throw new BusinessException(ResultCodeEnum.PARAM_ERROR);
     }
 
     /**

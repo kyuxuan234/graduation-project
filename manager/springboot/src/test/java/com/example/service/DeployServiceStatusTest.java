@@ -28,7 +28,9 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.nullable;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.lenient;
@@ -62,6 +64,11 @@ class DeployServiceStatusTest {
         lenient().when(deployMapper.casUpdateStatus(
                 nullable(Integer.class), nullable(String.class), nullable(Integer.class),
                 nullable(String.class), nullable(String.class), nullable(String.class)
+        )).thenReturn(1);
+        lenient().when(deployMapper.casApprove(
+                nullable(Integer.class), nullable(String.class), nullable(Integer.class),
+                nullable(String.class), nullable(String.class), nullable(String.class),
+                nullable(String.class)
         )).thenReturn(1);
     }
 
@@ -126,7 +133,10 @@ class DeployServiceStatusTest {
         deployService.approve(1, DeployStatusEnum.APPROVED.name(), "可以发布");
 
         InOrder order = inOrder(deployMapper, deployLogMapper);
-        order.verify(deployMapper).updateById(any(Deploy.class));
+        order.verify(deployMapper).casApprove(
+                nullable(Integer.class), nullable(String.class), nullable(Integer.class),
+                nullable(String.class), nullable(String.class), nullable(String.class),
+                nullable(String.class));
         ArgumentCaptor<DeployLog> captor = ArgumentCaptor.forClass(DeployLog.class);
         order.verify(deployLogMapper).insert(captor.capture());
         assertEquals(Integer.valueOf(1), captor.getValue().getDeployId());
@@ -160,6 +170,64 @@ class DeployServiceStatusTest {
         DeployLog log = captureLogInsert();
         assertEquals(DeployActionEnum.REJECT.name(), log.getAction());
         assertEquals("审批驳回，意见：缺少回滚方案", log.getDetail());
+    }
+
+    @Test
+    void approve_usesCas_insteadOfUpdateById() {
+        when(deployMapper.selectById(1)).thenReturn(deploy(1, DeployStatusEnum.PENDING, "v1.0.0", DeployTypeEnum.FULL));
+
+        deployService.approve(1, DeployStatusEnum.APPROVED.name(), "可以发布");
+
+        verify(deployMapper, never()).updateById(any(Deploy.class));
+        verify(deployMapper, never()).casUpdateStatus(
+                nullable(Integer.class), nullable(String.class), nullable(Integer.class),
+                nullable(String.class), nullable(String.class), nullable(String.class));
+        verify(deployMapper).casApprove(
+                nullable(Integer.class), nullable(String.class), nullable(Integer.class),
+                nullable(String.class), nullable(String.class), nullable(String.class),
+                nullable(String.class));
+    }
+
+    @Test
+    void approve_passesCurrentStatusAndRowVersion() {
+        when(deployMapper.selectById(1)).thenReturn(deploy(1, DeployStatusEnum.PENDING, "v1.0.0", DeployTypeEnum.FULL));
+
+        deployService.approve(1, DeployStatusEnum.APPROVED.name(), "可以发布");
+
+        // helper 未设置 rowVersion，服务层按 null -> 0 处理
+        verify(deployMapper).casApprove(
+                eq(1), eq(DeployStatusEnum.PENDING.name()), eq(0),
+                eq(DeployStatusEnum.APPROVED.name()), eq("ops1"), nullable(String.class), eq("可以发布"));
+    }
+
+    @Test
+    void approve_passesDbRowVersion_whenNotNull() {
+        Deploy pending = deploy(1, DeployStatusEnum.PENDING, "v1.0.0", DeployTypeEnum.FULL);
+        pending.setRowVersion(7);
+        when(deployMapper.selectById(1)).thenReturn(pending);
+
+        deployService.approve(1, DeployStatusEnum.APPROVED.name(), "可以发布");
+
+        ArgumentCaptor<String> timeCaptor = ArgumentCaptor.forClass(String.class);
+        verify(deployMapper).casApprove(eq(1), eq(DeployStatusEnum.PENDING.name()), eq(7),
+                eq(DeployStatusEnum.APPROVED.name()), eq("ops1"), timeCaptor.capture(), eq("可以发布"));
+        assertTrue(timeCaptor.getValue().matches("\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}:\\d{2}"),
+                "审批时间应由服务层按 yyyy-MM-dd HH:mm:ss 生成，实际：" + timeCaptor.getValue());
+    }
+
+    @Test
+    void approve_conflict_throwsConflictAndWritesNoLog() {
+        when(deployMapper.selectById(1)).thenReturn(deploy(1, DeployStatusEnum.PENDING, "v1.0.0", DeployTypeEnum.FULL));
+        when(deployMapper.casApprove(
+                nullable(Integer.class), nullable(String.class), nullable(Integer.class),
+                nullable(String.class), nullable(String.class), nullable(String.class),
+                nullable(String.class)
+        )).thenReturn(0);
+
+        BusinessException ex = assertThrows(BusinessException.class,
+                () -> deployService.approve(1, DeployStatusEnum.APPROVED.name(), "可以发布"));
+        assertEquals(ResultCodeEnum.DEPLOY_CONFLICT.code, ex.getCode());
+        verify(deployLogMapper, never()).insert(any(DeployLog.class));
     }
 
     private Deploy deploy(Integer id, DeployStatusEnum status, String version, DeployTypeEnum type) {

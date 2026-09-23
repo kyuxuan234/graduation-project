@@ -55,5 +55,6 @@ SOURCE upgrade_fk.sql;
 | 7 | `upgrade_deploy_version.sql` | 给 `deploy` 补 `rollback_version` 和乐观锁 `row_version`。`version` 仍是发布版本号 | 只改 `deploy` |
 | 8 | `upgrade_deploy_execution.sql` | 新建 `deploy_execution`，外键指向 `deploy.id` | 先有 `deploy` |
 | 9 | `upgrade_deploy_artifact.sql` | 新建 `deploy_artifact`，外键指向 `app.id` | 先有 `app` |
+| 10 | `upgrade_deploy_execute_mode.sql` | 给 `deploy` 补 `execute_mode`，已有行默认 `AUTO` | 只改 `deploy` |
 
-全新安装用 `schema.sql` 即可，这 5 个脚本不要再跑。Docker 空卷初始化也只执行 `schema.sql` 和 `data.sql`。
+全新安装用 `schema.sql` 即可，这些升级脚本不要再跑。Docker 空卷初始化也只执行 `schema.sql` 和 `data.sql`。

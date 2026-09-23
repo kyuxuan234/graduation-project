@@ -3,6 +3,7 @@
 -- 目标库：manager
 -- 盐值必须与 com.example.common.Constants.PASSWORD_SALT 保持一致
 -- 本脚本为幂等脚本，重复执行结果不变
+-- 执行顺序：第 3 个
 -- ============================================================
 
 SET NAMES utf8mb4;

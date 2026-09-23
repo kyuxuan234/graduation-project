@@ -1,7 +1,10 @@
 package com.example.controller;
 
 import com.example.common.Result;
+import com.example.dto.DeployExecSummaryVO;
+import com.example.dto.DeployLogLinesVO;
 import com.example.entity.Deploy;
+import com.example.service.DeployExecutionService;
 import com.example.service.DeployService;
 import com.github.pagehelper.PageInfo;
 import org.springframework.web.bind.annotation.*;
@@ -17,6 +20,9 @@ public class DeployController {
 
     @Resource
     private DeployService deployService;
+
+    @Resource
+    private DeployExecutionService deployExecutionService;
 
     /**
      * 发起部署申请，只有DEV角色可以操作
@@ -99,7 +105,7 @@ public class DeployController {
      */
     @PutMapping("/startDeploy/{id}")
     public Result<Void> startDeploy(@PathVariable Integer id) {
-        deployService.startDeploy(id);
+        deployExecutionService.startDeployEntry(id);
         return Result.success();
     }
 
@@ -118,8 +124,25 @@ public class DeployController {
      */
     @PutMapping("/rollback/{id}")
     public Result<Void> rollback(@PathVariable Integer id) {
-        deployService.rollback(id);
+        deployExecutionService.rollbackEntry(id);
         return Result.success();
+    }
+
+    /**
+     * 执行日志，cursor 为已读到的最大行序
+     */
+    @GetMapping("/{id}/logs")
+    public Result<DeployLogLinesVO> logs(@PathVariable Integer id,
+                                         @RequestParam(required = false) Integer cursor) {
+        return Result.success(deployService.execLogs(id, cursor));
+    }
+
+    /**
+     * 执行摘要：总行数、最近一次执行状态、头尾各若干行
+     */
+    @GetMapping("/{id}/execSummary")
+    public Result<DeployExecSummaryVO> execSummary(@PathVariable Integer id) {
+        return Result.success(deployService.execSummary(id));
     }
 
 }

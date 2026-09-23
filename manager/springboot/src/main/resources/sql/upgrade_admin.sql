@@ -2,6 +2,7 @@
 -- 为已有 manager.admin 补齐 status / create_time / update_time / deleted（幂等）
 -- 旧脚手架只有 id、username、password、name、avatar、role、phone、email
 -- 全新安装走 schema.sql，不必再执行本脚本
+-- 执行顺序：第 1 个
 -- ============================================================
 
 SET NAMES utf8mb4;

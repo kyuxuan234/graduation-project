@@ -95,10 +95,11 @@
           </template>
         </el-table-column>
 
-        <el-table-column label="日志" align="center" width="80">
+        <el-table-column label="日志" align="center" width="150">
           <template slot="header"><span class="th-label"><i class="el-icon-document"></i>日志</span></template>
           <template v-slot="scope">
             <el-button type="text" class="op-primary" @click="showLog(scope.row)">查看</el-button>
+            <el-button v-if="canExecLog(scope.row)" type="text" class="op-primary" @click="showExecLog(scope.row)">执行日志</el-button>
           </template>
         </el-table-column>
         <el-table-column label="操作" align="center" width="160">
@@ -155,6 +156,12 @@
         <el-form-item label="目标版本" prop="version">
           <el-input v-model="form.version" placeholder="如 v1.0.1"></el-input>
         </el-form-item>
+        <el-form-item label="制品" v-if="!form.id">
+          <el-upload :action="uploadAction" :headers="uploadHeaders" :show-file-list="false" :on-success="onArtifactUploaded">
+            <el-button size="small" icon="el-icon-upload2">上传制品</el-button>
+          </el-upload>
+          <span v-if="artifactName" style="margin-left: 8px">{{ artifactName }}</span>
+        </el-form-item>
         <el-form-item label="部署类型" prop="deployType">
           <el-select v-model="form.deployType" placeholder="请选择部署类型" style="width: 100%">
             <el-option v-for="item in typeOptions" :key="item.value" :label="item.label" :value="item.value"></el-option>
@@ -186,6 +193,14 @@
         <el-button type="primary" @click="submitApprove" icon="el-icon-check">确 定</el-button>
       </div>
     </el-dialog>
+
+    <el-drawer title="执行日志" :visible.sync="execVisible" size="50%" @close="closeExecLog">
+      <div style="padding: 0 16px 16px">
+        <p v-if="execSummary">共 {{ execSummary.totalLines }} 行，状态 {{ execSummary.status }}</p>
+        <pre style="white-space: pre-wrap; background: #0f1720; color: #d6e2ee; padding: 12px; min-height: 240px">{{ execText }}</pre>
+        <div v-if="!execText">暂无执行日志</div>
+      </div>
+    </el-drawer>
 
     <!--  流转记录  -->
     <el-dialog title="部署日志" :visible.sync="logVisible" width="60%" destroy-on-close>
@@ -230,6 +245,14 @@ export default {
       approveForm: {},
       logVisible: false,
       logData: [],
+      execVisible: false,
+      execText: '',
+      execSummary: null,
+      execTimer: null,
+      execRow: null,
+      execCursor: 0,
+      artifactName: '',
+      artifactUrl: '',
       appList: [],      // 应用下拉数据源
       serverList: [],   // 服务器下拉数据源
       user: JSON.parse(localStorage.getItem('xm-user') || '{}'),
@@ -279,6 +302,14 @@ export default {
     }
   },
   computed: {
+    uploadAction() {
+      const base = process.env.VUE_APP_API_BASE_URL || '/api'
+      return base + '/files/upload'
+    },
+    uploadHeaders() {
+      const user = JSON.parse(localStorage.getItem('xm-user') || '{}')
+      return { token: user.token || '' }
+    },
     deployHint() {
       if (this.params.id) return '当前按关联部署单定位'
       if (this.params.appId) return '当前查看该应用的部署单'
@@ -293,6 +324,9 @@ export default {
     this.loadApp()
     this.loadServer()
     this.load(1)
+  },
+  beforeDestroy() {
+    this.closeExecTimer()
   },
     watch: {
     '$route.fullPath'() {
@@ -346,7 +380,33 @@ export default {
     },
     handleApply() {   // 发起部署申请
       this.form = { deployType: 'FULL' }
+      this.artifactName = ''
+      this.artifactUrl = ''
       this.fromVisible = true
+    },
+    onArtifactUploaded(res, file) {
+      if (res && res.code === '200') {
+        this.artifactUrl = res.data
+        this.artifactName = file.name
+        this.$message.success('制品已上传，保存申请时会登记到当前版本')
+      } else {
+        this.$message.error((res && res.msg) || '上传失败')
+      }
+    },
+    registerArtifact() {
+      if (!this.artifactUrl || !this.form.appId || !this.form.version) {
+        return
+      }
+      this.$request.post('/deployArtifact/register', {
+        appId: this.form.appId,
+        version: this.form.version,
+        fileName: this.artifactName,
+        filePath: this.artifactUrl
+      }).then(res => {
+        if (res.code !== '200') {
+          this.$message.error(res.msg || '制品登记失败')
+        }
+      })
     },
     handleEdit(row) {   // 编辑数据
       this.form = JSON.parse(JSON.stringify(row))  // 给form对象赋值  注意要深拷贝数据
@@ -361,6 +421,7 @@ export default {
             data: this.form
           }).then(res => {
             if (res.code === '200') {  // 表示成功保存
+              this.registerArtifact()
               this.$message.success('保存成功')
               this.load(1)
               this.fromVisible = false
@@ -426,6 +487,53 @@ export default {
         })
       }).catch(() => {
       })
+    },
+    canExecLog(row) {
+      return row && (row.status === 'DEPLOYING' || row.status === 'SUCCESS' || row.status === 'FAILED')
+    },
+    showExecLog(row) {
+      this.execRow = row
+      this.execCursor = 0
+      this.execText = ''
+      this.execVisible = true
+      this.pullExecLog()
+      this.$request.get('/deploy/' + row.id + '/execSummary').then(res => {
+        this.execSummary = res.data || null
+      })
+      if (row.status === 'DEPLOYING') {
+        this.execTimer = setInterval(() => this.pullExecLog(), 2000)
+      }
+    },
+    pullExecLog() {
+      if (!this.execRow) return
+      this.$request.get('/deploy/' + this.execRow.id + '/logs', {
+        params: { cursor: this.execCursor }
+      }).then(res => {
+        const data = res.data || {}
+        const lines = data.lines || []
+        if (lines.length) {
+          this.execText = this.execText ? (this.execText + '\n' + lines.join('\n')) : lines.join('\n')
+        }
+        this.execCursor = data.nextCursor || this.execCursor
+        if (this.execRow.status === 'DEPLOYING') {
+          this.$request.get('/deploy/selectById/' + this.execRow.id).then(detail => {
+            if (detail.data && detail.data.status !== 'DEPLOYING') {
+              this.execRow = detail.data
+              this.closeExecTimer()
+            }
+          })
+        }
+      })
+    },
+    closeExecLog() {
+      this.closeExecTimer()
+      this.execRow = null
+    },
+    closeExecTimer() {
+      if (this.execTimer) {
+        clearInterval(this.execTimer)
+        this.execTimer = null
+      }
     },
     showLog(row) {   // 查看该部署单的流转记录
       this.$request.get('/deployLog/selectPage', {

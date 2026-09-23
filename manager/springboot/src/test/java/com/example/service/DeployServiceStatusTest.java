@@ -29,7 +29,9 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.nullable;
 import static org.mockito.Mockito.inOrder;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -57,6 +59,10 @@ class DeployServiceStatusTest {
         ops.setUsername("ops1");
         ops.setRole(RoleEnum.OPS.name());
         TokenUtils.bindCurrentUser(ops);
+        lenient().when(deployMapper.casUpdateStatus(
+                nullable(Integer.class), nullable(String.class), nullable(Integer.class),
+                nullable(String.class), nullable(String.class), nullable(String.class)
+        )).thenReturn(1);
     }
 
     @AfterEach
@@ -106,6 +112,9 @@ class DeployServiceStatusTest {
                 () -> deployService.finishDeploy(1, DeployStatusEnum.SUCCESS.name()));
         assertEquals(ResultCodeEnum.DEPLOY_STATUS_ERROR.code, ex.getCode());
         verify(deployMapper, never()).updateById(any(Deploy.class));
+        verify(deployMapper, never()).casUpdateStatus(
+                nullable(Integer.class), nullable(String.class), nullable(Integer.class),
+                nullable(String.class), nullable(String.class), nullable(String.class));
         verify(appMapper, never()).updateById(any(App.class));
         verify(deployLogMapper, never()).insert(any(DeployLog.class));
     }
@@ -123,6 +132,7 @@ class DeployServiceStatusTest {
         assertEquals(Integer.valueOf(1), captor.getValue().getDeployId());
         assertEquals(DeployActionEnum.APPROVE.name(), captor.getValue().getAction());
         assertEquals("ops1", captor.getValue().getOperator());
+        assertEquals("审批通过，意见：可以发布", captor.getValue().getDetail());
     }
 
     @Test
@@ -132,7 +142,9 @@ class DeployServiceStatusTest {
         deployService.startDeploy(1);
 
         InOrder order = inOrder(deployMapper, deployLogMapper);
-        order.verify(deployMapper).updateById(any(Deploy.class));
+        order.verify(deployMapper).casUpdateStatus(
+                nullable(Integer.class), nullable(String.class), nullable(Integer.class),
+                nullable(String.class), nullable(String.class), nullable(String.class));
         ArgumentCaptor<DeployLog> captor = ArgumentCaptor.forClass(DeployLog.class);
         order.verify(deployLogMapper).insert(captor.capture());
         assertEquals(DeployActionEnum.START_DEPLOY.name(), captor.getValue().getAction());

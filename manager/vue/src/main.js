@@ -10,7 +10,7 @@ import request from "@/utils/request";
 Vue.config.productionTip = false
 
 Vue.prototype.$request = request
-Vue.prototype.$baseUrl = process.env.VUE_APP_BASEURL
+Vue.prototype.$baseUrl = process.env.VUE_APP_API_BASE_URL || '/api'
 
 Vue.use(ElementUI, {size: "small"})
 

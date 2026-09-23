@@ -118,6 +118,12 @@ CREATE TABLE IF NOT EXISTS `server` (
   `env` VARCHAR(20) NULL DEFAULT NULL COMMENT '环境：DEV-开发 TEST-测试 PROD-生产',
   `status` VARCHAR(20) NULL DEFAULT 'RUNNING' COMMENT '状态：RUNNING-运行中 STOPPED-已停机 MAINTENANCE-维护中',
   `remark` VARCHAR(255) NULL DEFAULT NULL COMMENT '备注',
+  `ssh_port` INT NOT NULL DEFAULT 22 COMMENT 'SSH 端口',
+  `ssh_user` VARCHAR(64) NULL DEFAULT NULL COMMENT 'SSH 登录用户名',
+  `ssh_auth_type` VARCHAR(16) NOT NULL DEFAULT 'PASSWORD' COMMENT 'PASSWORD=密码；KEY=私钥',
+  `ssh_password` VARCHAR(512) NULL DEFAULT NULL COMMENT 'SSH 密码（应用层加密存储，非明文）',
+  `ssh_private_key` TEXT NULL COMMENT 'SSH 私钥内容（应用层加密存储）',
+  `deploy_path` VARCHAR(256) NULL DEFAULT NULL COMMENT '应用部署根目录，如 /opt/apps',
   `create_time` DATETIME NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
   `update_time` DATETIME NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
   `deleted` TINYINT NULL DEFAULT 0 COMMENT '逻辑删除：0-未删除 1-已删除',
@@ -171,6 +177,8 @@ CREATE TABLE IF NOT EXISTS `deploy` (
   `finish_time` DATETIME NULL DEFAULT NULL COMMENT '完成时间',
   `reason` VARCHAR(255) NULL DEFAULT NULL COMMENT '申请原因',
   `remark` VARCHAR(255) NULL DEFAULT NULL COMMENT '备注',
+  `rollback_version` VARCHAR(50) NULL DEFAULT NULL COMMENT '回滚目标版本',
+  `row_version` INT NOT NULL DEFAULT 0 COMMENT '乐观锁版本',
   `create_time` DATETIME NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
   `update_time` DATETIME NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
   `deleted` TINYINT NULL DEFAULT 0 COMMENT '逻辑删除：0-未删除 1-已删除',
@@ -189,14 +197,18 @@ CREATE TABLE IF NOT EXISTS `deploy` (
 CREATE TABLE IF NOT EXISTS `deploy_log` (
   `id` INT NOT NULL AUTO_INCREMENT COMMENT 'ID',
   `deploy_id` INT NULL DEFAULT NULL COMMENT '部署单id',
-  `action` VARCHAR(50) NULL DEFAULT NULL COMMENT '动作：APPLY-提交申请 APPROVE-审批通过 REJECT-审批驳回 START_DEPLOY-开始部署 FINISH-部署成功 FAIL-部署失败 ROLLBACK-回滚',
+  `action` VARCHAR(50) NULL DEFAULT NULL COMMENT '动作：APPLY-提交申请 APPROVE-审批通过 REJECT-审批驳回 START_DEPLOY-开始部署 FINISH-部署成功 FAIL-部署失败 ROLLBACK-回滚 EXEC-执行输出 HEALTH_CHECK_FAIL-探活失败',
   `operator` VARCHAR(50) NULL DEFAULT NULL COMMENT '操作人',
-  `detail` VARCHAR(500) NULL DEFAULT NULL COMMENT '操作说明',
+  `detail` VARCHAR(1024) NULL DEFAULT NULL COMMENT '操作说明',
+  `log_type` VARCHAR(16) NOT NULL DEFAULT 'STATE' COMMENT 'STATE-状态流转 EXEC-执行输出',
+  `seq` INT NOT NULL DEFAULT 0 COMMENT 'EXEC 行序从 1 递增，STATE 固定 0',
+  `source` VARCHAR(16) NOT NULL DEFAULT 'MANUAL' COMMENT 'MANUAL-人工 AUTO-系统自动',
   `create_time` DATETIME NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
   `update_time` DATETIME NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
   `deleted` TINYINT NULL DEFAULT 0 COMMENT '逻辑删除：0-未删除 1-已删除',
   PRIMARY KEY (`id`) USING BTREE,
   INDEX `idx_deploy_log_deploy_id`(`deploy_id`) USING BTREE,
+  INDEX `idx_log_deploy_type_seq`(`deploy_id`, `log_type`, `seq`) USING BTREE,
   CONSTRAINT `fk_deploy_log_deploy` FOREIGN KEY (`deploy_id`) REFERENCES `deploy` (`id`) ON DELETE RESTRICT ON UPDATE CASCADE
 ) ENGINE = InnoDB CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '部署流转记录' ROW_FORMAT = DYNAMIC;
 
@@ -226,3 +238,43 @@ CREATE TABLE IF NOT EXISTS `alarm` (
   CONSTRAINT `fk_alarm_app` FOREIGN KEY (`app_id`) REFERENCES `app` (`id`) ON DELETE RESTRICT ON UPDATE CASCADE,
   CONSTRAINT `fk_alarm_server` FOREIGN KEY (`server_id`) REFERENCES `server` (`id`) ON DELETE RESTRICT ON UPDATE CASCADE
 ) ENGINE = InnoDB CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '告警记录' ROW_FORMAT = DYNAMIC;
+
+-- ----------------------------
+-- 9. 部署执行记录（一次 startDeploy 对应一条，重试更新同一条）
+-- ----------------------------
+CREATE TABLE IF NOT EXISTS `deploy_execution` (
+  `id` INT NOT NULL AUTO_INCREMENT COMMENT 'ID',
+  `deploy_id` INT NOT NULL COMMENT '部署单id',
+  `status` VARCHAR(16) NOT NULL DEFAULT 'RUNNING' COMMENT 'RUNNING/SUCCESS/FAILED/TIMEOUT',
+  `exit_code` INT NULL DEFAULT NULL COMMENT '远程脚本退出码',
+  `retry_count` INT NOT NULL DEFAULT 0 COMMENT '已重试次数',
+  `start_time` DATETIME NULL DEFAULT NULL COMMENT '开始时间',
+  `end_time` DATETIME NULL DEFAULT NULL COMMENT '结束时间',
+  `error_message` VARCHAR(500) NULL DEFAULT NULL COMMENT '失败原因',
+  `create_time` DATETIME NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `update_time` DATETIME NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  `deleted` TINYINT NULL DEFAULT 0 COMMENT '逻辑删除',
+  PRIMARY KEY (`id`) USING BTREE,
+  INDEX `idx_execution_deploy`(`deploy_id`) USING BTREE,
+  CONSTRAINT `fk_execution_deploy` FOREIGN KEY (`deploy_id`) REFERENCES `deploy` (`id`) ON DELETE RESTRICT ON UPDATE CASCADE
+) ENGINE = InnoDB CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '部署执行记录' ROW_FORMAT = DYNAMIC;
+
+-- ----------------------------
+-- 10. 部署制品
+-- ----------------------------
+CREATE TABLE IF NOT EXISTS `deploy_artifact` (
+  `id` INT NOT NULL AUTO_INCREMENT COMMENT 'ID',
+  `app_id` INT NOT NULL COMMENT '应用id',
+  `version` VARCHAR(50) NOT NULL COMMENT '版本号',
+  `file_name` VARCHAR(255) NOT NULL COMMENT '原始文件名',
+  `file_path` VARCHAR(512) NOT NULL COMMENT '服务器本地路径',
+  `file_size` BIGINT NULL DEFAULT NULL COMMENT '字节数',
+  `md5` VARCHAR(32) NULL DEFAULT NULL COMMENT 'MD5',
+  `uploader` VARCHAR(50) NULL DEFAULT NULL COMMENT '上传人',
+  `create_time` DATETIME NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `update_time` DATETIME NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  `deleted` TINYINT NULL DEFAULT 0 COMMENT '逻辑删除',
+  PRIMARY KEY (`id`) USING BTREE,
+  INDEX `idx_artifact_app_version`(`app_id`, `version`) USING BTREE,
+  CONSTRAINT `fk_artifact_app` FOREIGN KEY (`app_id`) REFERENCES `app` (`id`) ON DELETE RESTRICT ON UPDATE CASCADE
+) ENGINE = InnoDB CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '部署制品' ROW_FORMAT = DYNAMIC;

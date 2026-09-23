@@ -98,6 +98,7 @@ const ALL_MENUS = [
       { index: '/app', name: '应用管理', icon: 'el-icon-s-platform', roles: ['ADMIN', 'DEV', 'OPS'] },
       { index: '/deploy', name: '部署管理', icon: 'el-icon-s-promotion', roles: ['ADMIN', 'DEV', 'OPS'] },
       { index: '/alarm', name: '告警管理', icon: 'el-icon-warning-outline', roles: ['ADMIN', 'DEV', 'OPS'] },
+      { index: '/analysis', name: '运维分析', icon: 'el-icon-data-line', roles: ['ADMIN', 'DEV', 'OPS'] },
     ]
   },
   {
@@ -116,6 +117,7 @@ const PAGE_ICONS = {
   '/app': 'el-icon-s-platform',
   '/deploy': 'el-icon-s-promotion',
   '/alarm': 'el-icon-warning-outline',
+  '/analysis': 'el-icon-data-line',
   '/dev': 'el-icon-user',
   '/ops': 'el-icon-s-custom',
   '/adminPerson': 'el-icon-user',

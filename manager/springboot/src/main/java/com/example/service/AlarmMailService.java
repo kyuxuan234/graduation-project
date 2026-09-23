@@ -62,7 +62,8 @@ public class AlarmMailService {
     }
 
     /**
-     * 正式告警：发件人/收件人取人员资料，INFO 不发；缺邮箱或失败只打日志。
+     * 正式告警：收件人取人员资料。人工登记用登记人邮箱做回复地址；自动探活没有登记人，仍发给人员资料。
+     * INFO 不发。缺邮箱或失败只打日志。
      */
     public void notifyNewAlarm(Alarm alarm, Account operator) {
         if (alarm == null || AlarmLevelEnum.INFO.name().equals(alarm.getLevel())) {
@@ -72,17 +73,24 @@ public class AlarmMailService {
             log.warn("告警邮件未发送：未配置 MAIL_PASSWORD 或已关闭 alarm.mail.enabled");
             return;
         }
-        String from = personMailService.emailOf(operator);
-        if (StrUtil.isBlank(from)) {
-            log.warn("告警邮件未发送：登记人未在人员资料中配置邮箱 alarmNo={}", alarm.getAlarmNo());
-            return;
+        final String from;
+        final String fromName;
+        if (operator != null) {
+            from = personMailService.emailOf(operator);
+            if (StrUtil.isBlank(from)) {
+                log.warn("告警邮件未发送：登记人未在人员资料中配置邮箱 alarmNo={}", alarm.getAlarmNo());
+                return;
+            }
+            fromName = personMailService.displayName(operator);
+        } else {
+            from = null;
+            fromName = "自动检测";
         }
         List<PersonMailAddress> recipients = personMailService.notifyRecipients(operator);
         if (recipients.isEmpty()) {
             log.warn("告警邮件未发送：没有可通知的人员邮箱 alarmNo={}", alarm.getAlarmNo());
             return;
         }
-        String fromName = personMailService.displayName(operator);
         executor.execute(() -> {
             try {
                 send(from, fromName, recipients, subject(alarm), body(alarm));

@@ -24,6 +24,12 @@ public class DeployLog implements Serializable {
     private String updateTime;
     /** 逻辑删除：0-未删除 1-已删除 */
     private Integer deleted;
+    /** STATE 或 EXEC */
+    private String logType;
+    /** 行序 */
+    private Integer seq;
+    /** MANUAL 或 AUTO */
+    private String source;
 
     public Integer getId() {
         return id;
@@ -87,5 +93,29 @@ public class DeployLog implements Serializable {
 
     public void setDeleted(Integer deleted) {
         this.deleted = deleted;
+    }
+
+    public String getLogType() {
+        return logType;
+    }
+
+    public void setLogType(String logType) {
+        this.logType = logType;
+    }
+
+    public Integer getSeq() {
+        return seq;
+    }
+
+    public void setSeq(Integer seq) {
+        this.seq = seq;
+    }
+
+    public String getSource() {
+        return source;
+    }
+
+    public void setSource(String source) {
+        this.source = source;
     }
 }

@@ -1,6 +1,8 @@
 package com.example.service;
 
 import cn.hutool.core.util.ObjectUtil;
+import cn.hutool.core.util.StrUtil;
+import com.example.common.CredentialCipher;
 import com.example.common.enums.ResultCodeEnum;
 import com.example.common.enums.ServerStatusEnum;
 import com.example.entity.Server;
@@ -26,11 +28,15 @@ public class ServerService {
     @Resource
     private AppMapper appMapper;
 
+    @Resource
+    private CredentialCipher credentialCipher;
+
     /**
      * 新增
      */
     public void add(Server server) {
         checkUnique(server, null);
+        encryptSecrets(server);
         if (ObjectUtil.isEmpty(server.getStatus())) {
             server.setStatus(ServerStatusEnum.RUNNING.name());
         }
@@ -70,6 +76,7 @@ public class ServerService {
      */
     public void updateById(Server server) {
         checkUnique(server, server.getId());
+        encryptSecrets(server);
         serverMapper.updateById(server);
     }
 
@@ -95,14 +102,20 @@ public class ServerService {
      * 根据ID查询
      */
     public Server selectById(Integer id) {
-        return serverMapper.selectById(id);
+        Server server = serverMapper.selectById(id);
+        hideSecrets(server);
+        return server;
     }
 
     /**
      * 查询所有未停机的服务器，给前端下拉框用
      */
     public List<Server> selectAll() {
-        return serverMapper.selectNotStopped();
+        List<Server> list = serverMapper.selectNotStopped();
+        for (Server server : list) {
+            hideSecrets(server);
+        }
+        return list;
     }
 
     /**
@@ -111,7 +124,34 @@ public class ServerService {
     public PageInfo<Server> selectPage(Server server, Integer pageNum, Integer pageSize) {
         PageHelper.startPage(pageNum, pageSize);
         List<Server> list = serverMapper.selectAll(server);
+        for (Server item : list) {
+            hideSecrets(item);
+        }
         return PageInfo.of(list);
+    }
+
+    private void encryptSecrets(Server server) {
+        if (server.getSshPort() == null) {
+            server.setSshPort(22);
+        }
+        if (StrUtil.isBlank(server.getSshPassword())) {
+            server.setSshPassword(null);
+        } else {
+            server.setSshPassword(credentialCipher.encrypt(server.getSshPassword()));
+        }
+        if (StrUtil.isBlank(server.getSshPrivateKey())) {
+            server.setSshPrivateKey(null);
+        } else {
+            server.setSshPrivateKey(credentialCipher.encrypt(server.getSshPrivateKey()));
+        }
+    }
+
+    private void hideSecrets(Server server) {
+        if (server == null) {
+            return;
+        }
+        server.setSshPassword(null);
+        server.setSshPrivateKey(null);
     }
 
 }

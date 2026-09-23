@@ -1,6 +1,7 @@
 package com.example.mapper;
 
 import com.example.entity.Alarm;
+import org.apache.ibatis.annotations.Param;
 
 import java.util.List;
 
@@ -33,5 +34,11 @@ public interface AlarmMapper {
       * 查询所有
     */
     List<Alarm> selectAll(Alarm alarm);
+
+    Alarm selectLatestByMarker(@Param("marker") String marker,
+                               @Param("appId") Integer appId,
+                               @Param("serverId") Integer serverId);
+
+    int updateContent(@Param("id") Integer id, @Param("content") String content);
 
 }

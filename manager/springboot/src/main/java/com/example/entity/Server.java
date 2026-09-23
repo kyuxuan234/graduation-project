@@ -37,6 +37,18 @@ public class Server implements Serializable {
 
     /** 联查字段：该服务器上的应用数 */
     private Integer appCount;
+    /** SSH 端口 */
+    private Integer sshPort;
+    /** SSH 登录用户名 */
+    private String sshUser;
+    /** PASSWORD 或 KEY */
+    private String sshAuthType;
+    /** SSH 密码（密文） */
+    private String sshPassword;
+    /** SSH 私钥（密文） */
+    private String sshPrivateKey;
+    /** 部署根目录 */
+    private String deployPath;
 
     public Integer getId() {
         return id;
@@ -148,5 +160,53 @@ public class Server implements Serializable {
 
     public void setAppCount(Integer appCount) {
         this.appCount = appCount;
+    }
+
+    public Integer getSshPort() {
+        return sshPort;
+    }
+
+    public void setSshPort(Integer sshPort) {
+        this.sshPort = sshPort;
+    }
+
+    public String getSshUser() {
+        return sshUser;
+    }
+
+    public void setSshUser(String sshUser) {
+        this.sshUser = sshUser;
+    }
+
+    public String getSshAuthType() {
+        return sshAuthType;
+    }
+
+    public void setSshAuthType(String sshAuthType) {
+        this.sshAuthType = sshAuthType;
+    }
+
+    public String getSshPassword() {
+        return sshPassword;
+    }
+
+    public void setSshPassword(String sshPassword) {
+        this.sshPassword = sshPassword;
+    }
+
+    public String getSshPrivateKey() {
+        return sshPrivateKey;
+    }
+
+    public void setSshPrivateKey(String sshPrivateKey) {
+        this.sshPrivateKey = sshPrivateKey;
+    }
+
+    public String getDeployPath() {
+        return deployPath;
+    }
+
+    public void setDeployPath(String deployPath) {
+        this.deployPath = deployPath;
     }
 }

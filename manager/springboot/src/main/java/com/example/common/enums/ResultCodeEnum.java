@@ -46,6 +46,8 @@ public enum ResultCodeEnum {
     MAIL_NOT_CONFIGURED_ERROR("6025", "邮件服务未配置"),
     MAIL_PERSON_EMAIL_MISSING("6026", "当前账号未在人员资料中配置邮箱"),
     MAIL_SEND_ERROR("6027", "邮件发送失败"),
+    DEPLOY_BUSY("6035", "该应用有正在进行的部署，请等待完成"),
+    DEPLOY_CONFLICT("6036", "部署状态已被其他人更新，请刷新后重试"),
     ;
 
     public String code;

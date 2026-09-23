@@ -15,4 +15,6 @@ public enum DeployActionEnum {
     FAIL,
     // 回滚
     ROLLBACK,
+    // 探活失败
+    HEALTH_CHECK_FAIL,
 }

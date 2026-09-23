@@ -1,6 +1,7 @@
 package com.example.mapper;
 
 import com.example.entity.Deploy;
+import org.apache.ibatis.annotations.Param;
 
 import java.util.List;
 
@@ -38,5 +39,18 @@ public interface DeployMapper {
       * 统计某应用下未删除的部署单数量
     */
     int countByAppId(Integer appId);
+
+    int casUpdateStatus(@Param("id") Integer id,
+                        @Param("expectStatus") String expectStatus,
+                        @Param("rowVersion") Integer rowVersion,
+                        @Param("status") String status,
+                        @Param("finishTime") String finishTime,
+                        @Param("deployType") String deployType);
+
+    int countOtherDeploying(@Param("appId") Integer appId, @Param("excludeId") Integer excludeId);
+
+    String selectLatestSuccessVersion(@Param("appId") Integer appId, @Param("excludeId") Integer excludeId);
+
+    List<Deploy> selectRecentForServer(@Param("serverId") Integer serverId, @Param("since") String since);
 
 }

@@ -6,3 +6,10 @@ spring:
     # 默认值为本地开发占位口令，生产环境见 application-prod.yml（强制环境变量注入）
     password: ${DB_PASSWORD:123456}
     url: jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3306}/${DB_NAME:manager}?useUnicode=true&characterEncoding=utf-8&useSSL=false&serverTimezone=GMT%2b8&allowPublicKeyRetrieval=true
+
+# 本地开发占位密钥，只用于加密演示数据，不能拿到生产环境用。
+credential:
+  key: ${CREDENTIAL_KEY:dev-credential-key}
+
+healthcheck:
+  enabled: false

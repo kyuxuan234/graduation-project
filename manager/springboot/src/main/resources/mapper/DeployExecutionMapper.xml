@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.mapper.DeployExecutionMapper">
+
+    <insert id="insert" parameterType="com.example.entity.DeployExecution" useGeneratedKeys="true" keyProperty="id">
+        insert into deploy_execution (deploy_id, status, exit_code, retry_count, start_time, end_time, error_message)
+        values (#{deployId}, #{status}, #{exitCode}, #{retryCount}, #{startTime}, #{endTime}, #{errorMessage})
+    </insert>
+
+    <update id="updateById" parameterType="com.example.entity.DeployExecution">
+        update deploy_execution
+        <set>
+            <if test="status != null">status = #{status},</if>
+            <if test="exitCode != null">exit_code = #{exitCode},</if>
+            <if test="retryCount != null">retry_count = #{retryCount},</if>
+            <if test="startTime != null">start_time = #{startTime},</if>
+            <if test="endTime != null">end_time = #{endTime},</if>
+            <if test="errorMessage != null">error_message = #{errorMessage},</if>
+        </set>
+        where id = #{id} and deleted = 0
+    </update>
+
+    <select id="selectLatest" resultType="com.example.entity.DeployExecution">
+        select id, deploy_id, status, exit_code, retry_count, start_time, end_time, error_message,
+               create_time, update_time, deleted
+        from deploy_execution
+        where deleted = 0 and deploy_id = #{deployId}
+        order by id desc
+        limit 1
+    </select>
+
+    <select id="selectRunning" resultType="com.example.entity.DeployExecution">
+        select id, deploy_id, status, exit_code, retry_count, start_time, end_time, error_message,
+               create_time, update_time, deleted
+        from deploy_execution
+        where deleted = 0 and deploy_id = #{deployId} and status = 'RUNNING'
+        order by id desc
+        limit 1
+    </select>
+
+    <select id="selectByStatus" resultType="com.example.entity.DeployExecution">
+        select id, deploy_id, status, exit_code, retry_count, start_time, end_time, error_message,
+               create_time, update_time, deleted
+        from deploy_execution
+        where deleted = 0 and status = #{status}
+        order by id
+    </select>
+
+</mapper>

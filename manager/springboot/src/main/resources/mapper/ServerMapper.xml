@@ -5,7 +5,7 @@
 <mapper namespace="com.example.mapper.ServerMapper">
 
     <sql id="Base_Column_List">
-        id,hostname,ip,os,cpu,memory,disk,env,status,remark,create_time,update_time,deleted
+        id,hostname,ip,os,cpu,memory,disk,env,status,remark,ssh_port,ssh_user,ssh_auth_type,ssh_password,ssh_private_key,deploy_path,create_time,update_time,deleted
     </sql>
 
     <select id="selectAll" resultType="com.example.entity.Server">
@@ -72,6 +72,12 @@
                 <if test="env != null">env,</if>
                 <if test="status != null">status,</if>
                 <if test="remark != null">remark,</if>
+                <if test="sshPort != null">ssh_port,</if>
+                <if test="sshUser != null">ssh_user,</if>
+                <if test="sshAuthType != null">ssh_auth_type,</if>
+                <if test="sshPassword != null">ssh_password,</if>
+                <if test="sshPrivateKey != null">ssh_private_key,</if>
+                <if test="deployPath != null">deploy_path,</if>
         </trim>
         <trim prefix="values (" suffix=")" suffixOverrides=",">
                 <if test="hostname != null">#{hostname},</if>
@@ -83,6 +89,12 @@
                 <if test="env != null">#{env},</if>
                 <if test="status != null">#{status},</if>
                 <if test="remark != null">#{remark},</if>
+                <if test="sshPort != null">#{sshPort},</if>
+                <if test="sshUser != null">#{sshUser},</if>
+                <if test="sshAuthType != null">#{sshAuthType},</if>
+                <if test="sshPassword != null">#{sshPassword},</if>
+                <if test="sshPrivateKey != null">#{sshPrivateKey},</if>
+                <if test="deployPath != null">#{deployPath},</if>
         </trim>
     </insert>
 
@@ -115,6 +127,24 @@
             </if>
             <if test="remark != null">
                 remark = #{remark},
+            </if>
+            <if test="sshPort != null">
+                ssh_port = #{sshPort},
+            </if>
+            <if test="sshUser != null">
+                ssh_user = #{sshUser},
+            </if>
+            <if test="sshAuthType != null">
+                ssh_auth_type = #{sshAuthType},
+            </if>
+            <if test="sshPassword != null">
+                ssh_password = #{sshPassword},
+            </if>
+            <if test="sshPrivateKey != null">
+                ssh_private_key = #{sshPrivateKey},
+            </if>
+            <if test="deployPath != null">
+                deploy_path = #{deployPath},
             </if>
         </set>
         where id = #{id}

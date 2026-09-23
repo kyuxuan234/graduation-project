@@ -124,4 +124,22 @@
         where id = #{id}
     </update>
 
+    <select id="selectLatestByMarker" resultType="com.example.entity.Alarm">
+        select
+        <include refid="Base_Column_List" />
+        from alarm al
+        where al.deleted = 0
+          and al.content like concat('%', #{marker}, '%')
+          <if test="appId != null">and al.app_id = #{appId}</if>
+          <if test="serverId != null">and al.server_id = #{serverId}</if>
+        order by al.id desc
+        limit 1
+    </select>
+
+    <update id="updateContent">
+        update alarm
+        set content = #{content}
+        where id = #{id} and deleted = 0
+    </update>
+
 </mapper>

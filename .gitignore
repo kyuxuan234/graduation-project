@@ -23,6 +23,7 @@ replay_pid*
 
 # Runtime uploads（只忽略仓库根和后端工作目录，manager/files 里的提示词要留着）
 /files/
+/manager/data/
 
 # Logs & temp
 *.log

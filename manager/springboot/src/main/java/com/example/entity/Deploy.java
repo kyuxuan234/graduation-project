@@ -36,6 +36,10 @@ public class Deploy implements Serializable {
     private String reason;
     /** 备注 */
     private String remark;
+    /** 回滚目标版本 */
+    private String rollbackVersion;
+    /** 乐观锁 */
+    private Integer rowVersion;
     /** 创建时间 */
     private String createTime;
     /** 更新时间 */
@@ -249,5 +253,21 @@ public class Deploy implements Serializable {
 
     public void setEndTime(String endTime) {
         this.endTime = endTime;
+    }
+
+    public String getRollbackVersion() {
+        return rollbackVersion;
+    }
+
+    public void setRollbackVersion(String rollbackVersion) {
+        this.rollbackVersion = rollbackVersion;
+    }
+
+    public Integer getRowVersion() {
+        return rowVersion;
+    }
+
+    public void setRowVersion(Integer rowVersion) {
+        this.rowVersion = rowVersion;
     }
 }

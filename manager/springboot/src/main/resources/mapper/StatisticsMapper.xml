@@ -77,11 +77,63 @@
                (select count(*) from alarm al where al.app_id = a.id and al.deleted = 0) as `alarmCount`,
                (select count(*) from alarm al where al.app_id = a.id and al.deleted = 0 and al.status in ('UNHANDLED', 'HANDLING')) as `openAlarmCount`,
                (select count(*) from alarm al where al.app_id = a.id and al.deleted = 0 and al.status in ('UNHANDLED', 'HANDLING') and al.`level` = 'CRITICAL') as `criticalOpenCount`,
-               (select count(*) from deploy d where d.app_id = a.id and d.deleted = 0 and d.status = 'FAILED') as `failedDeployCount`
+               (select count(*) from deploy d where d.app_id = a.id and d.deleted = 0 and d.status = 'FAILED') as `failedDeployCount`,
+               (select count(*) from alarm al
+                 where al.app_id = a.id and al.deleted = 0
+                   and al.create_time &gt;= (select max(d.finish_time) from deploy d where d.app_id = a.id and d.deleted = 0 and d.status = 'SUCCESS')
+                   and al.create_time &lt; date_add((select max(d.finish_time) from deploy d where d.app_id = a.id and d.deleted = 0 and d.status = 'SUCCESS'), interval 24 hour)
+               ) as `alarmAfterSuccess`
         from app a
         where a.deleted = 0
         order by `openAlarmCount` desc, `criticalOpenCount` desc, `alarmCount` desc, `deployCount` desc
         limit 8
+    </select>
+
+    <select id="countFailedByApp" resultType="java.util.Map">
+        select a.id as `id`, a.name as `name`, count(*) as `count`
+        from deploy d
+        join app a on d.app_id = a.id and a.deleted = 0
+        where d.deleted = 0 and d.status = 'FAILED' and d.finish_time &gt;= #{startDate}
+        group by a.id, a.name
+        order by `count` desc
+    </select>
+
+    <select id="countFailedByServer" resultType="java.util.Map">
+        select s.id as `id`, s.hostname as `name`, count(*) as `count`
+        from deploy d
+        join server s on d.server_id = s.id and s.deleted = 0
+        where d.deleted = 0 and d.status = 'FAILED' and d.finish_time &gt;= #{startDate}
+        group by s.id, s.hostname
+        order by `count` desc
+    </select>
+
+    <select id="countFailedByDay" resultType="java.util.Map">
+        select date_format(finish_time, '%Y-%m-%d') as `date`,
+               count(*) as `total`,
+               sum(case when status = 'FAILED' then 1 else 0 end) as `count`
+        from deploy
+        where deleted = 0
+          and status in ('SUCCESS', 'FAILED')
+          and finish_time &gt;= #{startDate}
+        group by date_format(finish_time, '%Y-%m-%d')
+        order by `date`
+    </select>
+
+    <select id="countExecKeyword" resultType="int">
+        select count(*)
+        from deploy_log
+        where deleted = 0
+          and log_type = 'EXEC'
+          and create_time &gt;= #{startDate}
+          and lower(detail) like concat('%', lower(#{keyword}), '%')
+    </select>
+
+    <select id="countAlarmByDay" resultType="java.util.Map">
+        select date_format(create_time, '%Y-%m-%d') as `date`, count(*) as `count`
+        from alarm
+        where deleted = 0 and create_time &gt;= #{startDate}
+        group by date_format(create_time, '%Y-%m-%d')
+        order by `date`
     </select>
 
 </mapper>

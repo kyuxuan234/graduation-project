@@ -75,4 +75,14 @@ public interface StatisticsMapper {
     */
     List<Map<String, Object>> countAppDeployAndAlarm();
 
+    List<Map<String, Object>> countFailedByApp(@Param("startDate") String startDate);
+
+    List<Map<String, Object>> countFailedByServer(@Param("startDate") String startDate);
+
+    List<Map<String, Object>> countFailedByDay(@Param("startDate") String startDate);
+
+    int countExecKeyword(@Param("startDate") String startDate, @Param("keyword") String keyword);
+
+    List<Map<String, Object>> countAlarmByDay(@Param("startDate") String startDate);
+
 }

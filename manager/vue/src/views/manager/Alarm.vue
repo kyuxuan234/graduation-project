@@ -22,11 +22,13 @@
       </div>
       <div class="toolbar-actions" v-if="canOps(user)">
         <el-button type="primary" plain @click="handleAdd" icon="el-icon-bell">登记告警</el-button>
+        <el-button type="danger" plain @click="delBatch" icon="el-icon-delete">批量删除</el-button>
       </div>
     </div>
 
     <div class="table">
-      <el-table :data="tableData" stripe size="small">
+      <el-table :data="tableData" stripe size="small" @selection-change="handleSelectionChange">
+        <el-table-column v-if="canOps(user)" type="selection" width="48" align="center" :selectable="canDelete"></el-table-column>
         <el-table-column label="告警编号" width="190">
           <template slot="header"><span class="th-label"><i class="el-icon-warning-outline"></i>告警编号</span></template>
           <template v-slot="scope">
@@ -151,6 +153,7 @@ export default {
     return {
       user: JSON.parse(localStorage.getItem('xm-user') || '{}'),
       tableData: [],  // 所有的数据
+      ids: [],
       pageNum: 1,   // 当前的页码
       pageSize: 20,  // 每页显示的个数
       total: 0,
@@ -308,6 +311,26 @@ export default {
             this.load(1)
           } else {
             this.$message.error(res.msg)  // 弹出错误的信息
+          }
+        })
+      }).catch(() => {
+      })
+    },
+    handleSelectionChange(rows) {
+      this.ids = rows.map(v => v.id)
+    },
+    delBatch() {
+      if (!this.ids.length) {
+        this.$message.warning('请选择数据')
+        return
+      }
+      this.$confirm('您确定批量删除这些数据吗？', '确认删除', {type: "warning"}).then(response => {
+        this.$request.delete('/alarm/delete/batch', {data: this.ids}).then(res => {
+          if (res.code === '200') {
+            this.$message.success('操作成功')
+            this.load(1)
+          } else {
+            this.$message.error(res.msg)
           }
         })
       }).catch(() => {

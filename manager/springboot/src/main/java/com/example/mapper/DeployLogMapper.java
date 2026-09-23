@@ -1,6 +1,7 @@
 package com.example.mapper;
 
 import com.example.entity.DeployLog;
+import org.apache.ibatis.annotations.Param;
 
 import java.util.List;
 
@@ -23,5 +24,19 @@ public interface DeployLogMapper {
       * 查询所有
     */
     List<DeployLog> selectAll(DeployLog deployLog);
+
+    int insertBatch(@Param("list") List<DeployLog> list);
+
+    Integer maxExecSeq(@Param("deployId") Integer deployId);
+
+    int countExec(@Param("deployId") Integer deployId);
+
+    List<DeployLog> selectExecAfter(@Param("deployId") Integer deployId,
+                                    @Param("cursor") Integer cursor,
+                                    @Param("limit") Integer limit);
+
+    List<DeployLog> selectExecHead(@Param("deployId") Integer deployId, @Param("limit") Integer limit);
+
+    List<DeployLog> selectExecTail(@Param("deployId") Integer deployId, @Param("limit") Integer limit);
 
 }

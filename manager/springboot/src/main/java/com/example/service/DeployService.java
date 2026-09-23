@@ -10,12 +10,16 @@ import com.example.common.enums.DeployStatusEnum;
 import com.example.common.enums.DeployTypeEnum;
 import com.example.common.enums.ResultCodeEnum;
 import com.example.common.enums.RoleEnum;
+import com.example.dto.DeployExecSummaryVO;
+import com.example.dto.DeployLogLinesVO;
 import com.example.entity.Account;
 import com.example.entity.App;
 import com.example.entity.Deploy;
+import com.example.entity.DeployExecution;
 import com.example.entity.DeployLog;
 import com.example.exception.BusinessException;
 import com.example.mapper.AppMapper;
+import com.example.mapper.DeployExecutionMapper;
 import com.example.mapper.DeployLogMapper;
 import com.example.mapper.DeployMapper;
 import com.example.utils.AuthUtils;
@@ -26,6 +30,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import javax.annotation.Resource;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Date;
 import java.util.List;
 
@@ -43,6 +49,9 @@ public class DeployService {
 
     @Resource
     private AppMapper appMapper;
+
+    @Resource
+    private DeployExecutionMapper deployExecutionMapper;
 
     /**
      * 发起部署申请，只有DEV角色可以操作
@@ -103,11 +112,8 @@ public class DeployService {
         Account currentUser = AuthUtils.requireRole(ResultCodeEnum.DEPLOY_EXECUTE_NO_PERMISSION, RoleEnum.OPS);
         Deploy dbDeploy = getExistDeploy(id);
         DeployStatusMachine.assertStart(dbDeploy.getStatus());
-
-        Deploy updateDeploy = new Deploy();
-        updateDeploy.setId(id);
-        updateDeploy.setStatus(DeployStatusEnum.DEPLOYING.name());
-        deployMapper.updateById(updateDeploy);
+        rememberRollbackTarget(dbDeploy);
+        changeStatus(dbDeploy, DeployStatusEnum.DEPLOYING.name(), null, null);
 
         // 开始部署只把应用置为部署中，版本与在线状态等 finishDeploy 成功后再反写
         App updateApp = new App();
@@ -125,31 +131,38 @@ public class DeployService {
     @Transactional(rollbackFor = Exception.class)
     public void finishDeploy(Integer id, String result) {
         Account currentUser = AuthUtils.requireRole(ResultCodeEnum.DEPLOY_EXECUTE_NO_PERMISSION, RoleEnum.OPS);
+        finishDeployAs(id, result, currentUser.getUsername());
+    }
+
+    /**
+     * 给异步线程收口。调用方已经在请求线程里记下操作人，这里不再读登录态。
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public void finishDeployAs(Integer id, String result, String operator) {
         Deploy dbDeploy = getExistDeploy(id);
         DeployStatusMachine.assertFinish(dbDeploy.getStatus(), result);
         boolean success = DeployStatusEnum.SUCCESS.name().equals(result);
+        changeStatus(dbDeploy, result, DateUtil.now(), null);
 
-        Deploy updateDeploy = new Deploy();
-        updateDeploy.setId(id);
-        updateDeploy.setStatus(result);
-        updateDeploy.setFinishTime(DateUtil.now());
-        deployMapper.updateById(updateDeploy);
+        String versionToWrite = dbDeploy.getVersion();
+        if (success && DeployTypeEnum.ROLLBACK.name().equals(dbDeploy.getDeployType())
+                && ObjectUtil.isNotEmpty(dbDeploy.getRollbackVersion())) {
+            versionToWrite = dbDeploy.getRollbackVersion();
+        }
 
         App updateApp = new App();
         updateApp.setId(dbDeploy.getAppId());
         if (success) {
-            // 部署成功才把目标版本同步到应用并置为在线
-            updateApp.setVersion(dbDeploy.getVersion());
+            updateApp.setVersion(versionToWrite);
             updateApp.setStatus(AppStatusEnum.ONLINE.name());
         } else {
-            // 部署失败不能停留在在线/部署中，回落到离线，避免资产台账失真
             updateApp.setStatus(AppStatusEnum.OFFLINE.name());
         }
         appMapper.updateById(updateApp);
 
         DeployActionEnum action = success ? DeployActionEnum.FINISH : DeployActionEnum.FAIL;
-        String detail = success ? "部署成功，版本：" + dbDeploy.getVersion() : "部署失败，版本：" + dbDeploy.getVersion();
-        saveLog(id, action, currentUser.getUsername(), detail);
+        String detail = success ? "部署成功，版本：" + versionToWrite : "部署失败，版本：" + dbDeploy.getVersion();
+        saveLog(id, action, operator, detail);
     }
 
     /**
@@ -160,13 +173,18 @@ public class DeployService {
         Account currentUser = AuthUtils.requireRole(ResultCodeEnum.DEPLOY_EXECUTE_NO_PERMISSION, RoleEnum.OPS);
         Deploy dbDeploy = getExistDeploy(id);
         DeployStatusMachine.assertRollback(dbDeploy.getStatus());
-
-        Deploy updateDeploy = new Deploy();
-        updateDeploy.setId(id);
-        updateDeploy.setDeployType(DeployTypeEnum.ROLLBACK.name());
-        updateDeploy.setStatus(DeployStatusEnum.DEPLOYING.name());
-        updateDeploy.setFinishTime("");
-        deployMapper.updateById(updateDeploy);
+        if (ObjectUtil.isEmpty(dbDeploy.getRollbackVersion())) {
+            String previous = deployMapper.selectLatestSuccessVersion(dbDeploy.getAppId(), id);
+            if (ObjectUtil.isEmpty(previous)) {
+                throw new BusinessException(ResultCodeEnum.DEPLOY_STATUS_ERROR.code, "没有可回滚的历史成功版本");
+            }
+            Deploy patch = new Deploy();
+            patch.setId(id);
+            patch.setRollbackVersion(previous);
+            deployMapper.updateById(patch);
+            dbDeploy.setRollbackVersion(previous);
+        }
+        changeStatus(dbDeploy, DeployStatusEnum.DEPLOYING.name(), "", DeployTypeEnum.ROLLBACK.name());
 
         App updateApp = new App();
         updateApp.setId(dbDeploy.getAppId());
@@ -174,7 +192,97 @@ public class DeployService {
         appMapper.updateById(updateApp);
 
         saveLog(id, DeployActionEnum.ROLLBACK, currentUser.getUsername(),
-                "发起回滚，原版本：" + dbDeploy.getVersion());
+                "发起回滚，目标版本：" + dbDeploy.getRollbackVersion());
+    }
+
+    /**
+     * 探活失败记一条自动流转，不改部署单状态。
+     */
+    public void saveHealthCheckLog(Integer deployId, String detail) {
+        DeployLog deployLog = new DeployLog();
+        deployLog.setDeployId(deployId);
+        deployLog.setAction(DeployActionEnum.HEALTH_CHECK_FAIL.name());
+        deployLog.setOperator("system");
+        deployLog.setDetail(detail);
+        deployLog.setLogType("STATE");
+        deployLog.setSeq(0);
+        deployLog.setSource("AUTO");
+        deployLogMapper.insert(deployLog);
+    }
+
+    public DeployLogLinesVO execLogs(Integer id, Integer cursor) {
+        getExistDeploy(id);
+        int from = cursor == null ? 0 : cursor;
+        int pageSize = 200;
+        List<DeployLog> rows = deployLogMapper.selectExecAfter(id, from, pageSize + 1);
+        boolean hasMore = rows.size() > pageSize;
+        if (hasMore) {
+            rows = rows.subList(0, pageSize);
+        }
+        DeployLogLinesVO vo = new DeployLogLinesVO();
+        List<String> lines = new ArrayList<String>();
+        int next = from;
+        for (DeployLog row : rows) {
+            lines.add(row.getDetail());
+            if (row.getSeq() != null) {
+                next = row.getSeq();
+            }
+        }
+        vo.setLines(lines);
+        vo.setHasMore(hasMore);
+        vo.setNextCursor(next);
+        return vo;
+    }
+
+    public DeployExecSummaryVO execSummary(Integer id) {
+        getExistDeploy(id);
+        int total = deployLogMapper.countExec(id);
+        DeployExecution execution = deployExecutionMapper.selectLatest(id);
+        if (total == 0 && execution == null) {
+            return DeployExecSummaryVO.empty();
+        }
+        DeployExecSummaryVO vo = new DeployExecSummaryVO();
+        vo.setTotalLines(total);
+        vo.setStatus(execution == null ? "NONE" : execution.getStatus());
+        vo.setHead(details(deployLogMapper.selectExecHead(id, 20)));
+        List<DeployLog> tail = deployLogMapper.selectExecTail(id, 20);
+        Collections.reverse(tail);
+        vo.setTail(details(tail));
+        return vo;
+    }
+
+    private List<Object> details(List<DeployLog> rows) {
+        List<Object> lines = new ArrayList<Object>();
+        if (rows == null) {
+            return lines;
+        }
+        for (DeployLog row : rows) {
+            lines.add(row.getDetail());
+        }
+        return lines;
+    }
+
+    private void rememberRollbackTarget(Deploy dbDeploy) {
+        if (ObjectUtil.isNotEmpty(dbDeploy.getRollbackVersion())) {
+            return;
+        }
+        String previous = deployMapper.selectLatestSuccessVersion(dbDeploy.getAppId(), dbDeploy.getId());
+        if (ObjectUtil.isEmpty(previous)) {
+            return;
+        }
+        Deploy patch = new Deploy();
+        patch.setId(dbDeploy.getId());
+        patch.setRollbackVersion(previous);
+        deployMapper.updateById(patch);
+        dbDeploy.setRollbackVersion(previous);
+    }
+
+    private void changeStatus(Deploy dbDeploy, String status, String finishTime, String deployType) {
+        int version = dbDeploy.getRowVersion() == null ? 0 : dbDeploy.getRowVersion();
+        int rows = deployMapper.casUpdateStatus(dbDeploy.getId(), dbDeploy.getStatus(), version, status, finishTime, deployType);
+        if (rows == 0) {
+            throw new BusinessException(ResultCodeEnum.DEPLOY_CONFLICT);
+        }
     }
 
     /**

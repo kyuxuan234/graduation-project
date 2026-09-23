@@ -1,9 +1,11 @@
 package com.example.controller;
 
 import com.example.common.Result;
+import com.example.dto.FailureAnalysisVO;
 import com.example.service.StatisticsService;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import javax.annotation.Resource;
@@ -74,6 +76,38 @@ public class StatisticsController {
     @GetMapping("/appRisk")
     public Result<List<Map<String, Object>>> appRisk() {
         return Result.success(statisticsService.appRisk());
+    }
+
+    /**
+     * 近 14 天部署趋势
+     */
+    @GetMapping("/deployTrend14")
+    public Result<List<Map<String, Object>>> deployTrend14() {
+        return Result.success(statisticsService.deployTrend14());
+    }
+
+    /**
+     * 失败分布。days 默认 30，范围 1 到 365
+     */
+    @GetMapping("/failure")
+    public Result<FailureAnalysisVO> failure(@RequestParam(required = false) Integer days) {
+        return Result.success(statisticsService.failureAnalysis(days));
+    }
+
+    /**
+     * 执行日志错误关键字前 10
+     */
+    @GetMapping("/errorTop")
+    public Result<List<Map<String, Object>>> errorTop(@RequestParam(required = false) Integer days) {
+        return Result.success(statisticsService.errorTop(days));
+    }
+
+    /**
+     * 告警按天数量和 7 日移动平均
+     */
+    @GetMapping("/alarmTrend")
+    public Result<List<Map<String, Object>>> alarmTrend(@RequestParam(required = false) Integer days) {
+        return Result.success(statisticsService.alarmTrend(days));
     }
 
 }

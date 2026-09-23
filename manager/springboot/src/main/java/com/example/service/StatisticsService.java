@@ -1,6 +1,8 @@
 package com.example.service;
 
 import cn.hutool.core.date.DateUtil;
+import com.example.common.ExecLogKeywords;
+import com.example.dto.FailureAnalysisVO;
 import com.example.mapper.StatisticsMapper;
 import org.springframework.stereotype.Service;
 
@@ -107,9 +109,133 @@ public class StatisticsService {
             item.put("openAlarmCount", num(pick(row, "openAlarmCount", "openalarmcount")));
             item.put("criticalOpenCount", num(pick(row, "criticalOpenCount", "criticalopencount")));
             item.put("failedDeployCount", num(pick(row, "failedDeployCount", "faileddeploycount")));
+            item.put("alarmAfterSuccess", num(pick(row, "alarmAfterSuccess", "alarmaftersuccess")));
             result.add(item);
         }
         return result;
+    }
+
+    /**
+     * 近 14 天部署单数量，缺的日期补 0。首页原有 7 天接口不变。
+     */
+    public List<Map<String, Object>> deployTrend14() {
+        return zeroFill(14, statisticsMapper.countDeployGroupByDate(startOf(14)));
+    }
+
+    /**
+     * 失败次数按应用、服务器、天汇总。天数限制在 1 到 365，默认 30。
+     */
+    public FailureAnalysisVO failureAnalysis(Integer days) {
+        int span = clampDays(days);
+        String start = startOf(span);
+        FailureAnalysisVO vo = new FailureAnalysisVO();
+        vo.setByApp(normalizeCount(statisticsMapper.countFailedByApp(start)));
+        vo.setByServer(normalizeCount(statisticsMapper.countFailedByServer(start)));
+        vo.setByDay(fillOutcome(span, statisticsMapper.countFailedByDay(start)));
+        return vo;
+    }
+
+    /**
+     * 执行日志关键字出现次数，取前 10。
+     */
+    public List<Map<String, Object>> errorTop(Integer days) {
+        String start = startOf(clampDays(days));
+        List<Map<String, Object>> list = new ArrayList<>();
+        for (String keyword : ExecLogKeywords.KEYWORDS) {
+            Map<String, Object> item = new LinkedHashMap<>();
+            item.put("keyword", keyword);
+            item.put("count", statisticsMapper.countExecKeyword(start, keyword));
+            list.add(item);
+        }
+        list.sort((a, b) -> Integer.compare(num(b.get("count")), num(a.get("count"))));
+        if (list.size() > 10) {
+            return new ArrayList<>(list.subList(0, 10));
+        }
+        return list;
+    }
+
+    /**
+     * 每日告警数，以及截至当天、最多 7 天的移动平均，保留 1 位小数。
+     */
+    public List<Map<String, Object>> alarmTrend(Integer days) {
+        int span = clampDays(days);
+        List<Map<String, Object>> daysRows = zeroFill(span, statisticsMapper.countAlarmByDay(startOf(span)));
+        for (int i = 0; i < daysRows.size(); i++) {
+            int from = Math.max(0, i - 6);
+            double sum = 0;
+            int width = i - from + 1;
+            for (int j = from; j <= i; j++) {
+                sum += num(daysRows.get(j).get("count"));
+            }
+            double avg = Math.round(sum / width * 10.0) / 10.0;
+            daysRows.get(i).put("avg", avg);
+        }
+        return daysRows;
+    }
+
+    private int clampDays(Integer days) {
+        if (days == null) {
+            return 30;
+        }
+        if (days < 1) {
+            return 1;
+        }
+        return Math.min(days, 365);
+    }
+
+    private String startOf(int days) {
+        Date startDate = DateUtil.offsetDay(new Date(), -(days - 1));
+        return DateUtil.formatDate(startDate) + " 00:00:00";
+    }
+
+    /** 按天补齐完成次数 total 和失败次数 count，没有记录的日期为 0。 */
+    private List<Map<String, Object>> fillOutcome(int days, List<Map<String, Object>> dbList) {
+        Date startDate = DateUtil.offsetDay(new Date(), -(days - 1));
+        Map<String, int[]> db = new HashMap<>();
+        for (Map<String, Object> row : dbList) {
+            String date = String.valueOf(pick(row, "date"));
+            db.put(date, new int[]{num(pick(row, "total")), num(pick(row, "count"))});
+        }
+        List<Map<String, Object>> list = new ArrayList<>();
+        for (int i = 0; i < days; i++) {
+            String date = DateUtil.formatDate(DateUtil.offsetDay(startDate, i));
+            int[] pair = db.get(date);
+            Map<String, Object> item = new LinkedHashMap<>();
+            item.put("date", date);
+            item.put("total", pair == null ? 0 : pair[0]);
+            item.put("count", pair == null ? 0 : pair[1]);
+            list.add(item);
+        }
+        return list;
+    }
+
+    private List<Map<String, Object>> zeroFill(int days, List<Map<String, Object>> dbList) {
+        Date startDate = DateUtil.offsetDay(new Date(), -(days - 1));
+        Map<String, Object> dbCountMap = new HashMap<>();
+        for (Map<String, Object> row : dbList) {
+            dbCountMap.put(String.valueOf(pick(row, "date")), pick(row, "count"));
+        }
+        List<Map<String, Object>> list = new ArrayList<>();
+        for (int i = 0; i < days; i++) {
+            String date = DateUtil.formatDate(DateUtil.offsetDay(startDate, i));
+            Map<String, Object> item = new LinkedHashMap<>();
+            item.put("date", date);
+            item.put("count", dbCountMap.containsKey(date) ? num(dbCountMap.get(date)) : 0);
+            list.add(item);
+        }
+        return list;
+    }
+
+    private List<Map<String, Object>> normalizeCount(List<Map<String, Object>> rows) {
+        List<Map<String, Object>> list = new ArrayList<>();
+        for (Map<String, Object> row : rows) {
+            Map<String, Object> item = new LinkedHashMap<>();
+            item.put("id", pick(row, "id"));
+            item.put("name", pick(row, "name"));
+            item.put("count", num(pick(row, "count")));
+            list.add(item);
+        }
+        return list;
     }
 
     private Object pick(Map<String, Object> row, String... keys) {

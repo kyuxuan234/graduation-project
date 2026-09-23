@@ -44,3 +44,37 @@ ip: localhost
 
 file:
   upload-dir: ${FILE_UPLOAD_DIR:files}
+
+# SSH 凭据密钥。留空则明文保存并打警告，不阻断启动。生产 profile 必须注入。
+credential:
+  key: ${CREDENTIAL_KEY:}
+
+deploy:
+  execution:
+    pool-size: 2
+    queue-capacity: 50
+    max-retry: 2
+    timeout-seconds: 300
+
+# 探活默认开启。本地 application-dev.yml 会关掉，避免没有 SSH 目标时刷告警。
+healthcheck:
+  enabled: true
+  server-cron: "0 */2 * * * ?"
+  app-cron: "30 */2 * * * ?"
+  auto-alarm-cooldown-minutes: 30
+
+# 只开放健康检查。端口与 server.port 相同，健康检查走 9090，不另开管理端口。
+# 邮件未配置时不发信，也不该把 /actuator/health 打成 DOWN。
+management:
+  health:
+    mail:
+      enabled: false
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-details: when-authorized
+  server:
+    port: 9090

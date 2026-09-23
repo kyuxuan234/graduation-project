@@ -146,6 +146,27 @@
             <el-option v-for="item in statusOptions" :key="item.value" :label="item.label" :value="item.value"></el-option>
           </el-select>
         </el-form-item>
+        <el-form-item label="SSH 端口" prop="sshPort">
+          <el-input v-model.number="form.sshPort" placeholder="默认 22"></el-input>
+        </el-form-item>
+        <el-form-item label="SSH 用户" prop="sshUser">
+          <el-input v-model="form.sshUser" placeholder="登录用户名"></el-input>
+        </el-form-item>
+        <el-form-item label="认证方式" prop="sshAuthType">
+          <el-select v-model="form.sshAuthType" placeholder="请选择" style="width: 100%">
+            <el-option label="密码" value="PASSWORD"></el-option>
+            <el-option label="私钥" value="KEY"></el-option>
+          </el-select>
+        </el-form-item>
+        <el-form-item label="SSH 密码" prop="sshPassword" v-if="form.sshAuthType !== 'KEY'">
+          <el-input v-model="form.sshPassword" show-password placeholder="留空则不修改"></el-input>
+        </el-form-item>
+        <el-form-item label="SSH 私钥" prop="sshPrivateKey" v-else>
+          <el-input type="textarea" :rows="4" v-model="form.sshPrivateKey" placeholder="留空则不修改"></el-input>
+        </el-form-item>
+        <el-form-item label="部署目录" prop="deployPath">
+          <el-input v-model="form.deployPath" placeholder="如 /opt/apps"></el-input>
+        </el-form-item>
         <el-form-item label="备注" prop="remark">
           <el-input type="textarea" :rows="4" v-model="form.remark" placeholder="备注"></el-input>
         </el-form-item>
@@ -236,7 +257,7 @@ export default {
       return row.status !== 'STOPPED' && row.status !== 'MAINTENANCE'
     },
     handleAdd() {   // 新增数据
-      this.form = { status: 'RUNNING' }  // 新增数据的时候清空数据
+      this.form = { status: 'RUNNING', sshPort: 22, sshAuthType: 'PASSWORD' }
       this.fromVisible = true   // 打开弹窗
     },
     handleEdit(row) {   // 编辑数据

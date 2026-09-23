@@ -29,6 +29,7 @@ const routes = [
       { path: 'deploy', name: 'Deploy', meta: { name: '部署管理' }, component: () => import('../views/manager/Deploy') },
       { path: 'deployLog', redirect: '/deploy' },
       { path: 'alarm', name: 'Alarm', meta: { name: '告警管理' }, component: () => import('../views/manager/Alarm') },
+      { path: 'analysis', name: 'Analysis', meta: { name: '运维分析' }, component: () => import('../views/manager/Analysis') },
       { path: 'dev', name: 'Dev', meta: { name: '开发人员' }, component: () => import('../views/manager/Dev') },
       { path: 'ops', name: 'Ops', meta: { name: '运维人员' }, component: () => import('../views/manager/Ops') },
       { path: 'admin', name: 'Admin', meta: { name: '超级管理员' }, component: () => import('../views/manager/Admin') },

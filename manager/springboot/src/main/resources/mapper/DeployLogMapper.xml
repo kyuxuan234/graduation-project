@@ -36,13 +36,63 @@
                 <if test="action != null">action,</if>
                 <if test="operator != null">operator,</if>
                 <if test="detail != null">detail,</if>
+                <if test="logType != null">log_type,</if>
+                <if test="seq != null">seq,</if>
+                <if test="source != null">source,</if>
         </trim>
         <trim prefix="values (" suffix=")" suffixOverrides=",">
                 <if test="deployId != null">#{deployId},</if>
                 <if test="action != null">#{action},</if>
                 <if test="operator != null">#{operator},</if>
                 <if test="detail != null">#{detail},</if>
+                <if test="logType != null">#{logType},</if>
+                <if test="seq != null">#{seq},</if>
+                <if test="source != null">#{source},</if>
         </trim>
     </insert>
+
+    <insert id="insertBatch">
+        insert into deploy_log (deploy_id, action, operator, detail, log_type, seq, source)
+        values
+        <foreach collection="list" item="item" separator=",">
+            (#{item.deployId}, #{item.action}, #{item.operator}, #{item.detail}, #{item.logType}, #{item.seq}, #{item.source})
+        </foreach>
+    </insert>
+
+    <select id="maxExecSeq" resultType="java.lang.Integer">
+        select ifnull(max(seq), 0)
+        from deploy_log
+        where deleted = 0 and deploy_id = #{deployId} and log_type = 'EXEC'
+    </select>
+
+    <select id="countExec" resultType="int">
+        select count(*)
+        from deploy_log
+        where deleted = 0 and deploy_id = #{deployId} and log_type = 'EXEC'
+    </select>
+
+    <select id="selectExecAfter" resultType="com.example.entity.DeployLog">
+        select id, deploy_id, detail, seq
+        from deploy_log
+        where deleted = 0 and deploy_id = #{deployId} and log_type = 'EXEC' and seq &gt; #{cursor}
+        order by seq asc
+        limit #{limit}
+    </select>
+
+    <select id="selectExecHead" resultType="com.example.entity.DeployLog">
+        select id, deploy_id, detail, seq
+        from deploy_log
+        where deleted = 0 and deploy_id = #{deployId} and log_type = 'EXEC'
+        order by seq asc
+        limit #{limit}
+    </select>
+
+    <select id="selectExecTail" resultType="com.example.entity.DeployLog">
+        select id, deploy_id, detail, seq
+        from deploy_log
+        where deleted = 0 and deploy_id = #{deployId} and log_type = 'EXEC'
+        order by seq desc
+        limit #{limit}
+    </select>
 
 </mapper>

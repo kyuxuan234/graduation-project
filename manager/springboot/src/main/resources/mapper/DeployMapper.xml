@@ -6,7 +6,7 @@
 
     <sql id="Base_Column_List">
         d.id,d.deploy_no,d.app_id,d.server_id,d.version,d.deploy_type,d.status,d.applicant,d.approver,
-        d.apply_time,d.approve_time,d.finish_time,d.reason,d.remark,d.create_time,d.update_time,d.deleted
+        d.apply_time,d.approve_time,d.finish_time,d.reason,d.remark,d.rollback_version,d.row_version,d.create_time,d.update_time,d.deleted
     </sql>
 
     <!-- 联查字段：应用名、应用编号、服务器主机名 -->
@@ -145,8 +145,57 @@
             <if test="remark != null">
                 remark = #{remark},
             </if>
+            <if test="rollbackVersion != null">
+                rollback_version = #{rollbackVersion},
+            </if>
         </set>
         where id = #{id}
     </update>
+
+    <update id="casUpdateStatus">
+        update deploy
+        set status = #{status},
+            row_version = row_version + 1
+            <choose>
+                <when test="finishTime == ''">, finish_time = null</when>
+                <when test="finishTime != null">, finish_time = #{finishTime}</when>
+            </choose>
+            <if test="deployType != null">, deploy_type = #{deployType}</if>
+        where id = #{id}
+          and deleted = 0
+          and status = #{expectStatus}
+          and row_version = #{rowVersion}
+    </update>
+
+    <select id="countOtherDeploying" resultType="int">
+        select count(*)
+        from deploy
+        where deleted = 0
+          and app_id = #{appId}
+          and status = 'DEPLOYING'
+          and id != #{excludeId}
+    </select>
+
+    <select id="selectLatestSuccessVersion" resultType="java.lang.String">
+        select version
+        from deploy
+        where deleted = 0
+          and app_id = #{appId}
+          and status = 'SUCCESS'
+          and id != #{excludeId}
+        order by finish_time desc, id desc
+        limit 1
+    </select>
+
+    <select id="selectRecentForServer" resultType="com.example.entity.Deploy">
+        select id, deploy_no, app_id, server_id, version, status, finish_time
+        from deploy
+        where deleted = 0
+          and server_id = #{serverId}
+          and (
+            status = 'DEPLOYING'
+            or (status = 'SUCCESS' and finish_time is not null and finish_time &gt;= #{since})
+          )
+    </select>
 
 </mapper>

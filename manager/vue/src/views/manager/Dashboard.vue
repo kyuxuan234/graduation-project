@@ -78,6 +78,11 @@
         </div>
       </section>
 
+      <section class="ops-panel p-trend">
+        <h3><i class="el-icon-data-line"></i>近14天部署</h3>
+        <div ref="trend14" class="trend-box"></div>
+      </section>
+
       <section class="ops-panel p-deploy">
         <h3><i class="el-icon-s-promotion"></i>部署交付闭环</h3>
         <div v-for="item in deployBars" :key="item.value" class="rank clickable" @click="$router.push({ path: '/deploy', query: { status: item.value } })">
@@ -95,6 +100,7 @@
               <th><i class="el-icon-s-platform"></i>应用</th>
               <th><i class="el-icon-s-promotion"></i>部署单</th>
               <th><i class="el-icon-warning-outline"></i>告警</th>
+              <th><i class="el-icon-time"></i>24h告警</th>
               <th><i class="el-icon-circle-check"></i>完成</th>
               <th><i class="el-icon-aim"></i>风险</th>
             </tr>
@@ -104,12 +110,13 @@
               <td class="clickable" @click="go('/app', { id: row.id })"><i class="el-icon-s-platform"></i>{{ row.name }}</td>
               <td class="clickable" @click="go('/deploy', { appId: row.id })">{{ num(row.deployCount) }}</td>
               <td class="clickable" @click="go('/alarm', { appId: row.id })">{{ num(row.alarmCount) }}</td>
+              <td class="clickable" @click="go('/alarm', { appId: row.id })">{{ num(row.alarmAfterSuccess) }}</td>
               <td class="clickable" @click="go('/alarm', { appId: row.id, status: 'RESOLVED' })">{{ resolvedAlarm(row) }}</td>
               <td class="clickable" @click="go('/alarm', { appId: row.id })">
                 <span class="risk" :class="riskLevel(row).tone"><i :class="riskLevel(row).icon"></i>{{ riskLevel(row).name }}</span>
               </td>
             </tr>
-            <tr v-if="!appRisk.length"><td colspan="5" class="empty">暂无应用数据</td></tr>
+            <tr v-if="!appRisk.length"><td colspan="6" class="empty">暂无应用数据</td></tr>
           </tbody>
         </table>
       </section>
@@ -123,59 +130,12 @@
         </div>
       </section>
 
-      <section class="ops-panel p-server">
-        <h3><i class="el-icon-monitor"></i>服务器资源配置</h3>
-        <div v-for="row in serverRanks" :key="row.id" class="rank clickable host" @click="$router.push({ path: '/server', query: { id: row.id } })">
-          <span><i class="el-icon-monitor"></i>{{ row.hostname }}</span>
-          <div class="bar"><i :class="row.tone" :style="{ width: barWidth(row.score, serverMax) }"></i></div>
-          <em>{{ row.memory }}</em>
-        </div>
-        <div v-if="!serverRanks.length" class="empty">暂无服务器</div>
-      </section>
-
-      <section class="ops-panel p-recent">
-        <h3><i class="el-icon-tickets"></i>近期部署单</h3>
-        <table class="ops-table">
-          <thead>
-            <tr>
-              <th><i class="el-icon-tickets"></i>单号</th>
-              <th><i class="el-icon-s-platform"></i>应用</th>
-              <th><i class="el-icon-flag"></i>状态</th>
-              <th><i class="el-icon-time"></i>时间</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="row in recentDeploys" :key="row.id" @click="$router.push({ path: '/deploy', query: { id: row.id } })">
-              <td><i class="el-icon-tickets"></i>{{ row.deployNo }}</td>
-              <td><i class="el-icon-s-platform"></i>{{ row.appName }}</td>
-              <td><span class="risk" :class="deployTone(row.status)"><i :class="deployIcon(row.status)"></i>{{ deployName(row.status) }}</span></td>
-              <td><i class="el-icon-time"></i>{{ shortTime(row.applyTime) }}</td>
-            </tr>
-            <tr v-if="!recentDeploys.length"><td colspan="4" class="empty">暂无部署单</td></tr>
-          </tbody>
-        </table>
-      </section>
-
-      <section class="ops-panel p-topo">
-        <h3><i class="el-icon-share"></i>业务闭环</h3>
-        <div class="topo">
-          <div class="node" @click="$router.push('/project')"><i class="el-icon-folder"></i>项目编号</div>
-          <div class="line"></div>
-          <div class="node" @click="$router.push('/server')"><i class="el-icon-monitor"></i>主机名</div>
-          <div class="line"></div>
-          <div class="node" @click="$router.push('/app')"><i class="el-icon-s-platform"></i>应用编号</div>
-          <div class="line"></div>
-          <div class="node warn" @click="$router.push('/deploy')"><i class="el-icon-s-promotion"></i>部署单号</div>
-          <div class="line"></div>
-          <div class="node danger" @click="$router.push('/alarm')"><i class="el-icon-warning-outline"></i>告警编号</div>
-        </div>
-        <p class="topo-tip">列表里顺着编号往下点：<br>项目编号 → 主机名 → 应用编号 → 部署单号 → 告警编号。</p>
-      </section>
     </div>
   </div>
 </template>
 
 <script>
+import * as echarts from 'echarts'
 import OsLogo from '@/components/OsLogo'
 
 const DEPLOY_STATUS = [
@@ -191,11 +151,6 @@ const ALARM_STATUS = [
   { value: 'HANDLING', name: '处理中', tone: 'warn', icon: 'el-icon-loading' },
   { value: 'RESOLVED', name: '已解决', tone: 'ok', icon: 'el-icon-circle-check' },
 ]
-const DEPLOY_NAMES = {
-  PENDING: '待审批', APPROVED: '已批准', DEPLOYING: '部署中',
-  SUCCESS: '已交付', FAILED: '失败', REJECTED: '已驳回'
-}
-
 export default {
   name: "Dashboard",
   components: { OsLogo },
@@ -213,8 +168,8 @@ export default {
       deployBars: [],
       alarmBars: [],
       appRisk: [],
+      trendChart: null,
       recentDeploys: [],
-      serverRanks: [],
       osCount: { centos: 0, ubuntu: 0 },
       envCount: { DEV: 0, TEST: 0, PROD: 0 },
       serverStatus: { RUNNING: 0, STOPPED: 0, MAINTENANCE: 0 },
@@ -304,9 +259,6 @@ export default {
     },
     alarmMax() {
       return Math.max(1, ...this.alarmBars.map(v => v.count))
-    },
-    serverMax() {
-      return Math.max(1, ...this.serverRanks.map(v => v.score))
     }
   },
   created() {
@@ -317,14 +269,20 @@ export default {
     this.loadServers()
     this.loadRecentDeploys()
     this.loadNotices()
+    this.loadTrend14()
     this.tickerTimer = setInterval(() => {
       if (this.tickerItems.length) {
         this.tickerIndex = (this.tickerIndex + 1) % this.tickerItems.length
       }
     }, 4000)
   },
+  mounted() {
+    window.addEventListener('resize', this.resizeTrend)
+  },
   beforeDestroy() {
     if (this.tickerTimer) clearInterval(this.tickerTimer)
+    window.removeEventListener('resize', this.resizeTrend)
+    if (this.trendChart) this.trendChart.dispose()
   },
   methods: {
     go(path, query) {
@@ -341,13 +299,6 @@ export default {
     barWidth(count, max) {
       return Math.max(6, Math.round(this.num(count) * 100 / max)) + '%'
     },
-    parseSize(v) {
-      const s = String(v || '').toUpperCase()
-      const n = parseFloat(s.replace(/[^\d.]/g, ''))
-      if (isNaN(n)) return 0
-      if (s.includes('T')) return n * 1024
-      return n
-    },
     resolvedAlarm(row) {
       return Math.max(0, this.num(row.alarmCount) - this.num(row.openAlarmCount))
     },
@@ -358,20 +309,6 @@ export default {
       if (critical >= 1 || failed >= 1 || open >= 2) return { name: '高', tone: 'danger', icon: 'el-icon-warning' }
       if (open >= 1) return { name: '中', tone: 'warn', icon: 'el-icon-info' }
       return { name: '低', tone: 'ok', icon: 'el-icon-success' }
-    },
-    deployIcon(status) {
-      const item = DEPLOY_STATUS.find(v => v.value === status)
-      return item ? item.icon : 'el-icon-flag'
-    },
-    deployName(status) {
-      return DEPLOY_NAMES[status] || status
-    },
-    deployTone(status) {
-      const item = DEPLOY_STATUS.find(v => v.value === status)
-      return item ? item.tone : ''
-    },
-    shortTime(v) {
-      return v ? String(v).slice(5, 16) : '-'
     },
     loadCount() {
       this.$request.get('/statistics/count').then(res => {
@@ -403,6 +340,53 @@ export default {
         this.appRisk = res.data || []
       })
     },
+    resizeTrend() {
+      if (this.trendChart) this.trendChart.resize()
+    },
+    loadTrend14() {
+      this.$request.get('/statistics/deployTrend14').then(res => {
+        const rows = res.data || []
+        this.$nextTick(() => {
+          if (!this.$refs.trend14) return
+          if (!this.trendChart) this.trendChart = echarts.init(this.$refs.trend14)
+          this.trendChart.setOption({
+            backgroundColor: 'transparent',
+            grid: { left: 8, right: 12, top: 16, bottom: 4, containLabel: true },
+            tooltip: { trigger: 'axis' },
+            xAxis: {
+              type: 'category',
+              data: rows.map(v => String(v.date).slice(5)),
+              axisLine: { lineStyle: { color: 'rgba(61, 231, 255, 0.25)' } },
+              axisLabel: { color: '#7aa8b8', fontSize: 11 }
+            },
+            yAxis: {
+              type: 'value',
+              minInterval: 1,
+              splitLine: { lineStyle: { color: 'rgba(61, 231, 255, 0.1)' } },
+              axisLabel: { color: '#7aa8b8', fontSize: 11 }
+            },
+            series: [{
+              type: 'line',
+              data: rows.map(v => v.count),
+              smooth: true,
+              symbolSize: 6,
+              itemStyle: { color: '#3de7ff' },
+              lineStyle: { color: '#3de7ff', width: 2 },
+              areaStyle: {
+                color: {
+                  type: 'linear', x: 0, y: 0, x2: 0, y2: 1,
+                  colorStops: [
+                    { offset: 0, color: 'rgba(61, 231, 255, 0.35)' },
+                    { offset: 1, color: 'rgba(61, 231, 255, 0.02)' }
+                  ]
+                }
+              }
+            }]
+          })
+          this.trendChart.resize()
+        })
+      })
+    },
     loadServers() {
       this.$request.get('/server/selectPage', { params: { pageNum: 1, pageSize: 200 } }).then(res => {
         const list = res.data?.list || []
@@ -419,14 +403,6 @@ export default {
         this.osCount = osCount
         this.envCount = envCount
         this.serverStatus = serverStatus
-        this.serverRanks = list
-            .map(row => ({
-              ...row,
-              score: this.parseSize(row.memory) + this.parseSize(row.cpu) * 2,
-              tone: row.env === 'PROD' ? 'danger' : (row.env === 'TEST' ? 'warn' : 'cyan')
-            }))
-            .sort((a, b) => b.score - a.score)
-            .slice(0, 6)
       })
     },
     loadRecentDeploys() {
@@ -518,20 +494,18 @@ export default {
   grid-template-columns: 1.05fr 1.5fr 1fr;
   grid-template-areas:
     "overview asset kpi"
-    "deploy apps alarm"
-    "server recent topo";
+    "trend trend trend"
+    "deploy apps alarm";
   gap: 12px;
 }
 
 .p-overview { grid-area: overview; }
 .p-asset { grid-area: asset; }
 .p-kpi { grid-area: kpi; }
+.p-trend { grid-area: trend; }
 .p-deploy { grid-area: deploy; }
-.p-apps { grid-area: apps; }
+.p-apps { grid-area: apps; overflow-x: auto; }
 .p-alarm { grid-area: alarm; }
-.p-server { grid-area: server; }
-.p-recent { grid-area: recent; }
-.p-topo { grid-area: topo; }
 
 .ops-panel {
   position: relative;
@@ -557,7 +531,6 @@ export default {
 .rank span i,
 .ops-table i,
 .env-chip i,
-.topo .node i,
 .risk i {
   margin-right: 5px;
 }
@@ -572,24 +545,41 @@ export default {
 
 .ov-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px 16px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
 }
 
 .ov {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 6px 0;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  min-width: 0;
+  padding: 8px 10px;
   cursor: pointer;
   color: #8ec8e0;
-  font-size: 13px;
-  border-bottom: 1px dashed rgba(61, 231, 255, 0.12);
+  font-size: 12px;
+  background: rgba(61, 231, 255, 0.05);
+  border: 1px solid rgba(61, 231, 255, 0.16);
+  border-radius: 4px;
+}
+
+.ov span {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .ov b {
   color: #e8fbff;
-  font-size: 18px;
+  font-size: 20px;
+  line-height: 1.2;
+}
+
+.trend-box {
+  height: 168px;
+  overflow: hidden;
 }
 
 .asset-row {
@@ -617,6 +607,7 @@ export default {
 .asset-item span {
   color: #7aa8b8;
   font-size: 12px;
+  white-space: nowrap;
 }
 
 .env-row {
@@ -661,10 +652,6 @@ export default {
   margin-bottom: 8px;
   color: #9ad6ea;
   font-size: 12px;
-}
-
-.rank.host {
-  grid-template-columns: 118px 1fr 42px;
 }
 
 .rank span {
@@ -743,63 +730,14 @@ export default {
   padding: 16px 0;
 }
 
-.topo {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin-bottom: 12px;
-}
-
-.topo .node {
-  min-width: 58px;
-  padding: 8px 6px;
-  text-align: center;
-  border: 1px solid rgba(61, 231, 255, 0.4);
-  color: #7af0ff;
-  cursor: pointer;
-  box-shadow: 0 0 10px rgba(61, 231, 255, 0.18);
-  font-size: 12px;
-}
-
-.topo .node i {
-  display: block;
-  margin: 0 auto 4px;
-  font-size: 16px;
-}
-
-.topo .node.warn {
-  border-color: rgba(255, 209, 92, 0.5);
-  color: #ffd15c;
-}
-
-.topo .node.danger {
-  border-color: rgba(255, 107, 129, 0.5);
-  color: #ff6b81;
-}
-
-.topo .line {
-  width: 16px;
-  height: 1px;
-  background: #3de7ff;
-  box-shadow: 0 0 8px #3de7ff;
-}
-
-.topo-tip {
-  margin: 8px 2px 0;
-  color: #6f97a8;
-  font-size: 12px;
-  line-height: 1.6;
-}
-
 @media (max-width: 1280px) {
   .ops-grid {
     grid-template-columns: 1fr 1fr;
     grid-template-areas:
       "overview asset"
       "kpi deploy"
-      "apps alarm"
-      "server recent"
-      "topo topo";
+      "trend trend"
+      "apps alarm";
   }
 }
 </style>

@@ -4,7 +4,7 @@ import cn.hutool.core.util.StrUtil;
 import com.example.entity.Server;
 import net.schmizz.sshj.SSHClient;
 import net.schmizz.sshj.connection.channel.direct.Session;
-import net.schmizz.sshj.transport.verification.PromiscuousVerifier;
+import net.schmizz.sshj.transport.verification.HostKeyVerifier;
 import net.schmizz.sshj.userauth.keyprovider.KeyProvider;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -20,6 +20,7 @@ import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
@@ -35,11 +36,28 @@ public class SshDeployExecutor implements DeployExecutor {
 
     private static final Logger log = LoggerFactory.getLogger(SshDeployExecutor.class);
 
+    private static final int CONNECT_TIMEOUT_MILLIS = 10000;
+    private static final int SOCKET_TIMEOUT_MILLIS = 10000;
+
     @Resource
     private CredentialCipher credentialCipher;
 
     @Value("${deploy.execution.timeout-seconds:300}")
     private int timeoutSeconds;
+
+    /** 主机密钥校验档位：accept-new（默认）/ known-hosts / off。 */
+    @Value("${deploy.ssh.host-key-check:accept-new}")
+    private String hostKeyCheck;
+
+    /** known_hosts 文件路径，accept-new 首次连接会在此写入目标机指纹。 */
+    @Value("${deploy.ssh.known-hosts:${user.dir}/data/known_hosts}")
+    private String knownHostsPath;
+
+    /**
+     * 复用的主机密钥校验器。单例复用有两点好处：避免重复解析文件，以及让 accept-new 档的
+     * 写入/追加锁覆盖同一实例上的所有部署线程，防止并发写出重复或半截条目。
+     */
+    private volatile HostKeyVerifier hostKeyVerifier;
 
     private final ScheduledExecutorService killer = Executors.newScheduledThreadPool(1, runnable -> {
         Thread thread = new Thread(runnable, "ssh-timeout-");
@@ -167,10 +185,7 @@ public class SshDeployExecutor implements DeployExecutor {
             throw new IllegalStateException("SSH 配置不完整");
         }
         int port = server.getSshPort() == null || server.getSshPort() <= 0 ? 22 : server.getSshPort();
-        SSHClient client = new SSHClient();
-        client.addHostKeyVerifier(new PromiscuousVerifier());
-        client.setConnectTimeout(10000);
-        client.setTimeout(10000);
+        SSHClient client = createClient();
         client.connect(server.getIp(), port);
         if ("KEY".equalsIgnoreCase(server.getSshAuthType())) {
             String keyText = credentialCipher.decrypt(server.getSshPrivateKey());
@@ -215,11 +230,36 @@ public class SshDeployExecutor implements DeployExecutor {
     }
 
     private SSHClient newClient() {
+        return createClient();
+    }
+
+    /**
+     * 统一创建一个已装好主机密钥校验与超时的客户端。open() 与 newClient() 共用，避免两处配置漂移。
+     */
+    private SSHClient createClient() {
         SSHClient client = new SSHClient();
-        client.addHostKeyVerifier(new PromiscuousVerifier());
-        client.setConnectTimeout(10000);
-        client.setTimeout(10000);
+        client.addHostKeyVerifier(hostKeyVerifier());
+        client.setConnectTimeout(CONNECT_TIMEOUT_MILLIS);
+        client.setTimeout(SOCKET_TIMEOUT_MILLIS);
         return client;
+    }
+
+    /**
+     * 惰性创建并缓存主机密钥校验器。@Value 注入发生在构造之后，故不能在构造器里建。
+     */
+    private HostKeyVerifier hostKeyVerifier() {
+        HostKeyVerifier local = hostKeyVerifier;
+        if (local == null) {
+            synchronized (this) {
+                local = hostKeyVerifier;
+                if (local == null) {
+                    local = SshHostKeyVerifier.create(hostKeyCheck, Paths.get(knownHostsPath));
+                    log.info("SSH 主机密钥校验档位：{}，known_hosts：{}", hostKeyCheck, knownHostsPath);
+                    hostKeyVerifier = local;
+                }
+            }
+        }
+        return local;
     }
 
     private void authPublicKey(SSHClient client, String user, String privatePem) throws Exception {

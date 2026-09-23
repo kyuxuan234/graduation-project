@@ -24,6 +24,10 @@ replay_pid*
 # Runtime uploads（只忽略仓库根和后端工作目录，manager/files 里的提示词要留着）
 /files/
 /manager/data/
+# 后端运行时数据：SSH known_hosts 默认落在后端工作目录（deploy.ssh.known-hosts=${user.dir}/data/known_hosts），运行时才生成
+# 同时覆盖"以仓库根为工作目录启动"的情形
+/data/
+/manager/springboot/data/
 
 # Logs & temp
 *.log
@@ -49,3 +53,8 @@ tmp/
 Thumbs.db
 Desktop.ini
 ehthumbs.db
+
+# 论文过程文档（评分卡 / 答辩口径 / 定位建议书 / 范围映射）：仅供本地备赛，不入库
+manager/files/manager-final-scorecard*.md
+manager/files/manager-thesis-*.md
+manager/files/manager-defense-*.md

@@ -102,6 +102,22 @@
     border-bottom: 1px solid #e8eef6;
 }
 
+.page-head-text {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.page-head-text em {
+    font-style: normal;
+    font-size: 12px;
+    font-weight: 400;
+    color: #8492a6;
+    letter-spacing: 0;
+    line-height: 1.4;
+}
+
 .page-head i {
     margin-right: 10px;
     color: #3b7cff;
@@ -113,6 +129,7 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
+    flex-shrink: 0;
 }
 
 .manager-main-right .search,

@@ -19,7 +19,7 @@
         <el-button type="warning" plain @click="reset" icon="el-icon-refresh-left">重置</el-button>
       </div>
       <div class="toolbar-actions">
-        <el-button type="primary" plain @click="handleAdd" icon="el-icon-plus">新增</el-button>
+        <el-button type="primary" plain @click="handleAdd" icon="el-icon-plus">新增服务器</el-button>
         <el-button type="danger" plain @click="delBatch" icon="el-icon-delete">批量删除</el-button>
       </div>
     </div>
@@ -82,6 +82,15 @@
           <template slot="header"><span class="th-label"><i class="el-icon-connection"></i>关联应用</span></template>
           <template v-slot="scope">
             <span class="cell-text link-text" @click="goApps(scope.row)"><i class="el-icon-s-platform"></i>{{ scope.row.appCount || 0 }} 个</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="SSH" width="100" align="center">
+          <template slot="header"><span class="th-label"><i class="el-icon-key"></i>SSH</span></template>
+          <template v-slot="scope">
+            <el-tag :type="scope.row.sshAuthType === 'KEY' ? 'success' : 'info'" size="mini">
+              <i :class="scope.row.sshAuthType === 'KEY' ? 'el-icon-key' : 'el-icon-warning-outline'"></i>
+              {{ scope.row.sshAuthType === 'KEY' ? '已开通' : '待开通' }}
+            </el-tag>
           </template>
         </el-table-column>
         <el-table-column label="备注" min-width="120" show-overflow-tooltip>
@@ -155,7 +164,7 @@
         </el-form-item>
         <el-form-item label="SSH 密码" prop="sshPassword">
           <el-input v-model="form.sshPassword" show-password placeholder="留空则不修改"></el-input>
-          <div style="color: #909399; font-size: 12px; line-height: 1.5; margin-top: 6px">登记密码。保存时用这个密码登录一次，生成私钥放到目标机，之后登录都用这把私钥。</div>
+          <div style="color: #909399; font-size: 12px; line-height: 1.5; margin-top: 6px">登记一次登录密码。保存时系统会登录目标机写入公钥，之后自动部署与探活都用密钥，不必反复填密码。</div>
         </el-form-item>
         <el-form-item label="部署目录" prop="deployPath">
           <el-input v-model="form.deployPath" placeholder="如 /opt/apps"></el-input>

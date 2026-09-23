@@ -17,25 +17,25 @@
                 <path d="M3 12h4l3 8 4-16 3 8h4"></path>
               </svg>
             </div>
-            <div>DevOps 运维管理系统<small>OPS CONSOLE</small></div>
+            <div>DevOps 发布管理系统<small>RELEASE & OPS</small></div>
           </div>
           <div class="live"><i></i>系统在线</div>
         </div>
 
         <div class="main">
           <div class="side">
-            <h2>统一管控你的<br><span>项目 · 服务器 · 部署 · 告警</span></h2>
-            <p>轻量级运维控制台，覆盖应用全生命周期，部署审批与告警闭环一屏可追。</p>
+            <h2>按发布链路管控<br><span>项目 → 应用 → 部署 → 告警</span></h2>
+            <p>开发提交发布申请，运维审批并自动或手动执行；探活与告警在同一控制台闭环。</p>
             <div class="tags">
-              <span>项目管理</span>
-              <span>服务器监控</span>
-              <span>部署审批</span>
+              <span>发布申请</span>
+              <span>审批执行</span>
+              <span>自动部署</span>
               <span>告警闭环</span>
             </div>
             <div class="stats">
-              <div class="stat"><b>3</b><em>角色体系</em></div>
-              <div class="stat"><b>8</b><em>数据模型</em></div>
-              <div class="stat"><b>1</b><em>管控视图</em></div>
+              <div class="stat"><b>3</b><em>角色协同</em></div>
+              <div class="stat"><b>2</b><em>执行方式</em></div>
+              <div class="stat"><b>1</b><em>发布看板</em></div>
             </div>
           </div>
 

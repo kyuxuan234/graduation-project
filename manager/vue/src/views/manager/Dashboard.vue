@@ -1,5 +1,6 @@
 <template>
   <div class="ops">
+    <div class="role-tip">{{ roleTip }}</div>
     <div class="notice-bar" v-if="tickerItem" :class="['is-' + tickerItem.tone, { clickable: !!tickerItem.path }]" @click="goTicker">
       <i :class="tickerItem.icon"></i>
       <em>{{ tickerItem.label }}</em>
@@ -7,7 +8,7 @@
     </div>
     <div class="ops-grid">
       <section class="ops-panel p-overview">
-        <h3><i class="el-icon-data-analysis"></i>业务总览</h3>
+        <h3><i class="el-icon-data-analysis"></i>一览</h3>
         <div class="ov-grid">
           <div v-for="item in cards" :key="item.key" class="ov" @click="go(item.path, item.query)">
             <span><i :class="item.icon"></i>{{ item.name }}</span>
@@ -84,7 +85,7 @@
       </section>
 
       <section class="ops-panel p-deploy">
-        <h3><i class="el-icon-s-promotion"></i>部署交付闭环</h3>
+        <h3><i class="el-icon-s-promotion"></i>部署状态</h3>
         <div v-for="item in deployBars" :key="item.value" class="rank clickable" @click="$router.push({ path: '/deploy', query: { status: item.value } })">
           <span><i :class="item.icon"></i>{{ item.name }}</span>
           <div class="bar"><i :class="item.tone" :style="{ width: barWidth(item.count, deployMax) }"></i></div>
@@ -93,7 +94,7 @@
       </section>
 
       <section class="ops-panel p-apps">
-        <h3><i class="el-icon-s-platform"></i>应用变更与风险</h3>
+        <h3><i class="el-icon-s-platform"></i>应用风险</h3>
         <table class="ops-table">
           <thead>
             <tr>
@@ -122,7 +123,7 @@
       </section>
 
       <section class="ops-panel p-alarm">
-        <h3><i class="el-icon-warning-outline"></i>告警处置闭环</h3>
+        <h3><i class="el-icon-warning-outline"></i>告警状态</h3>
         <div v-for="item in alarmBars" :key="item.value" class="rank clickable" @click="$router.push({ path: '/alarm', query: { status: item.value } })">
           <span><i :class="item.icon"></i>{{ item.name }}</span>
           <div class="bar"><i :class="item.tone" :style="{ width: barWidth(item.count, alarmMax) }"></i></div>
@@ -254,6 +255,14 @@ export default {
     tickerItem() {
       if (!this.tickerItems.length) return null
       return this.tickerItems[this.tickerIndex % this.tickerItems.length]
+    },
+    roleTip() {
+      const map = {
+        DEV: '你的主线：选应用 → 新建发布申请 → 等运维审批执行',
+        OPS: '你的主线：审批部署单 → 自动/手动执行 → 接手告警闭环',
+        ADMIN: '全流程可见：项目 / 服务器 / 应用 / 部署 / 告警 / 人员'
+      }
+      return map[this.user.role] || '发布管理系统工作台'
     },
     deployMax() {
       return Math.max(1, ...this.deployBars.map(v => v.count))
@@ -446,6 +455,16 @@ export default {
 .ops {
   color: #c8eef8;
   min-height: calc(100vh - 88px);
+}
+
+.role-tip {
+  margin: 0 0 10px;
+  padding: 8px 12px;
+  border-radius: 6px;
+  border: 1px solid rgba(61, 231, 255, 0.28);
+  background: rgba(12, 40, 66, 0.72);
+  color: #9edfff;
+  font-size: 13px;
 }
 
 .notice-bar {

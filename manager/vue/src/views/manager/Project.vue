@@ -16,7 +16,7 @@
         <el-button type="warning" plain @click="reset" icon="el-icon-refresh-left">重置</el-button>
       </div>
       <div class="toolbar-actions">
-        <el-button type="primary" plain @click="handleAdd" icon="el-icon-plus">新增</el-button>
+        <el-button type="primary" plain @click="handleAdd" icon="el-icon-plus">新增项目</el-button>
         <el-button type="danger" plain @click="delBatch" icon="el-icon-delete">批量删除</el-button>
       </div>
     </div>
@@ -27,7 +27,7 @@
         <el-table-column label="项目编号" width="140">
           <template slot="header"><span class="th-label"><i class="el-icon-postcard"></i>项目编号</span></template>
           <template v-slot="scope">
-            <span class="cell-text cell-code link-text" @click="goServers(scope.row)"><i class="el-icon-postcard"></i>{{ scope.row.code }}</span>
+            <span class="cell-text cell-code link-text" @click="goDown(scope.row)"><i class="el-icon-postcard"></i>{{ scope.row.code }}</span>
           </template>
         </el-table-column>
         <el-table-column label="项目名" min-width="150" show-overflow-tooltip>
@@ -295,15 +295,16 @@ export default {
     handleCurrentChange(pageNum) {
       this.load(pageNum)
     },
-    goApps(row) {   // 跳到应用管理，按该项目筛选
+    goApps(row) {   // 跳到应用，按该项目筛选
       this.$router.push({ path: '/app', query: { projectId: row.id } })
     },
-    goServers(row) {
-      if (!canOps(this.user)) {
-        this.$message.info('服务器由运维管理，相关主机可在应用中查看')
+    goDown(row) {
+      // 开发无服务器菜单：点编号进应用；运维可进服务器
+      if (canOps(this.user)) {
+        this.$router.push({ path: '/server', query: { projectId: row.id } })
         return
       }
-      this.$router.push({ path: '/server', query: { projectId: row.id } })
+      this.goApps(row)
     },
   }
 }

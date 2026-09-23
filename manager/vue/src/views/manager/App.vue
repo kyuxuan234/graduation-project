@@ -21,7 +21,7 @@
         <el-button type="warning" plain @click="reset" icon="el-icon-refresh-left">重置</el-button>
       </div>
       <div class="toolbar-actions">
-        <el-button type="primary" plain @click="handleAdd" icon="el-icon-plus">新增</el-button>
+        <el-button type="primary" plain @click="handleAdd" icon="el-icon-plus">新增应用</el-button>
         <el-button type="danger" plain @click="delBatch" icon="el-icon-delete">批量删除</el-button>
       </div>
     </div>

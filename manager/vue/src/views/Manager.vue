@@ -5,13 +5,13 @@
       <div class="manager-header-left">
         <img src="@/assets/imgs/logo.png" />
         <div>
-          <div class="title">运维管理系统</div>
+          <div class="title">发布管理系统</div>
           <div class="ops-clock" v-if="isOps">{{ nowText }}</div>
         </div>
       </div>
 
       <div class="manager-header-center">
-        <div class="ops-main-title" v-if="isOps"><i class="el-icon-monitor"></i>DevOps 运维管理系统监控</div>
+        <div class="ops-main-title" v-if="isOps"><i class="el-icon-monitor"></i>DevOps 发布监控</div>
         <el-breadcrumb v-else separator-class="el-icon-arrow-right">
           <el-breadcrumb-item :to="{ path: '/dashboard' }">首页</el-breadcrumb-item>
           <el-breadcrumb-item :to="{ path: $route.path }">{{ $route.meta.name }}</el-breadcrumb-item>
@@ -73,7 +73,10 @@
       <div class="manager-main-right">
         <div class="page-head" v-if="$route.path !== '/dashboard'">
           <i :class="pageIcon"></i>
-          <span>{{ $route.meta.name }}</span>
+          <div class="page-head-text">
+            <span>{{ $route.meta.name }}</span>
+            <em v-if="$route.meta.hint">{{ $route.meta.hint }}</em>
+          </div>
         </div>
         <router-view @update:user="updateUser" />
       </div>
@@ -89,20 +92,20 @@ import { defaultAvatar, resolveAvatar } from '@/utils/avatar'
 
 // 全部菜单，roles 表示哪些角色可见
 const ALL_MENUS = [
-  { index: '/dashboard', name: '首页仪表盘', icon: 'el-icon-s-home', roles: ['ADMIN', 'DEV', 'OPS'] },
+  { index: '/dashboard', name: '工作台', icon: 'el-icon-s-home', roles: ['ADMIN', 'DEV', 'OPS'] },
   {
-    index: 'ops', name: '运维管理', icon: 'el-icon-s-operation',
+    index: 'ops', name: '发布管理', icon: 'el-icon-s-operation',
     children: [
-      { index: '/project', name: '项目管理', icon: 'el-icon-folder', roles: ['ADMIN', 'DEV'] },
-      { index: '/server', name: '服务器管理', icon: 'el-icon-monitor', roles: ['ADMIN', 'OPS'] },
-      { index: '/app', name: '应用管理', icon: 'el-icon-s-platform', roles: ['ADMIN', 'DEV', 'OPS'] },
-      { index: '/deploy', name: '部署管理', icon: 'el-icon-s-promotion', roles: ['ADMIN', 'DEV', 'OPS'] },
-      { index: '/alarm', name: '告警管理', icon: 'el-icon-warning-outline', roles: ['ADMIN', 'DEV', 'OPS'] },
-      { index: '/analysis', name: '运维分析', icon: 'el-icon-data-line', roles: ['ADMIN', 'DEV', 'OPS'] },
+      { index: '/project', name: '项目', icon: 'el-icon-folder', roles: ['ADMIN', 'DEV'] },
+      { index: '/server', name: '服务器', icon: 'el-icon-monitor', roles: ['ADMIN', 'OPS'] },
+      { index: '/app', name: '应用', icon: 'el-icon-s-platform', roles: ['ADMIN', 'DEV', 'OPS'] },
+      { index: '/deploy', name: '部署单', icon: 'el-icon-s-promotion', roles: ['ADMIN', 'DEV', 'OPS'] },
+      { index: '/alarm', name: '告警', icon: 'el-icon-warning-outline', roles: ['ADMIN', 'DEV', 'OPS'] },
+      { index: '/analysis', name: '发布分析', icon: 'el-icon-data-line', roles: ['ADMIN', 'DEV', 'OPS'] },
     ]
   },
   {
-    index: 'user', name: '用户管理', icon: 'el-icon-user-solid',
+    index: 'user', name: '系统设置', icon: 'el-icon-user-solid',
     children: [
       { index: '/dev', name: '开发人员', icon: 'el-icon-user', roles: ['ADMIN'] },
       { index: '/ops', name: '运维人员', icon: 'el-icon-s-custom', roles: ['ADMIN'] },

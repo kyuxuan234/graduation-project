@@ -17,15 +17,15 @@
                 <path d="M3 12h4l3 8 4-16 3 8h4"></path>
               </svg>
             </div>
-            <div>DevOps 运维管理系统<small>OPS CONSOLE</small></div>
+            <div>DevOps 发布管理系统<small>RELEASE & OPS</small></div>
           </div>
           <div class="live"><i></i>系统在线</div>
         </div>
 
         <div class="main">
           <div class="side">
-            <h2>统一管控你的<br><span>项目 · 服务器 · 部署 · 告警</span></h2>
-            <p>开发或运维人员可在此注册账号，超级管理员账号不走此入口。</p>
+            <h2>加入发布协作<br><span>开发申请 · 运维执行</span></h2>
+            <p>开发或运维人员在此注册。超级管理员不走此入口，由系统初始化。</p>
             <div class="tags">
               <span>开发注册</span>
               <span>运维注册</span>

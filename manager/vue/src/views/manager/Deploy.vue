@@ -19,7 +19,7 @@
         <el-button type="warning" plain @click="reset" icon="el-icon-refresh-left">重置</el-button>
       </div>
       <div class="toolbar-actions" v-if="canDev(user)">
-        <el-button type="primary" plain @click="handleApply" icon="el-icon-s-promotion">发起部署申请</el-button>
+        <el-button type="primary" plain @click="handleApply" icon="el-icon-s-promotion">新建发布申请</el-button>
         <el-button type="danger" plain @click="delBatch" icon="el-icon-delete">批量删除</el-button>
       </div>
     </div>
@@ -107,10 +107,10 @@
           </template>
         </el-table-column>
 
-        <el-table-column label="部署" align="center" width="64" fixed="right">
-          <template slot="header"><span class="th-label"><i class="el-icon-s-promotion"></i>部署</span></template>
+        <el-table-column label="操作" align="center" width="88" fixed="right">
+          <template slot="header"><span class="th-label"><i class="el-icon-s-promotion"></i>操作</span></template>
           <template v-slot="scope">
-            <el-button class="op-icon-btn" type="primary" size="mini" icon="el-icon-s-promotion" title="部署" @click="openAction(scope.row)">部署</el-button>
+            <el-button class="op-icon-btn" type="primary" size="mini" :icon="actionIcon(scope.row)" :title="actionLabel(scope.row)" @click="openAction(scope.row)">{{ actionLabel(scope.row) }}</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -208,7 +208,7 @@
             </el-radio-group>
           </el-form-item>
         </el-form>
-        <p class="action-tip">自动部署通过 SSH 执行脚本，需要已上传制品。手动部署会在这个窗口里打开终端，操作完成后再标记结果。</p>
+        <p class="action-tip">自动：SSH 跑脚本（需已有制品）。手动：本窗打开终端，做完后点成功/失败。</p>
       </div>
 
       <div v-else-if="actionScene === 'manual'">
@@ -549,6 +549,30 @@ export default {
       if (canOps(this.user) && row.status === 'DEPLOYING') return 'auto'
       if (canOps(this.user) && row.status === 'SUCCESS') return 'rollback'
       return 'view'
+    },
+    actionLabel(row) {
+      const map = {
+        approve: '审批',
+        edit: '修改',
+        start: '执行',
+        manual: '终端',
+        auto: '进度',
+        rollback: '回滚',
+        view: '查看'
+      }
+      return map[this.sceneOf(row)] || '查看'
+    },
+    actionIcon(row) {
+      const map = {
+        approve: 'el-icon-check',
+        edit: 'el-icon-edit',
+        start: 'el-icon-video-play',
+        manual: 'el-icon-monitor',
+        auto: 'el-icon-loading',
+        rollback: 'el-icon-refresh-left',
+        view: 'el-icon-view'
+      }
+      return map[this.sceneOf(row)] || 'el-icon-view'
     },
     openAction(row) {
       this.actionRow = row

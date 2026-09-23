@@ -6,7 +6,7 @@
         <el-radio-button :label="30">近30天</el-radio-button>
         <el-radio-button :label="90">近90天</el-radio-button>
       </el-radio-group>
-      <p class="page-note">首页近 14 天只统计发布次数。这里分开看成败、失败落在哪、日志错误类型，以及告警走势。</p>
+      <p class="page-note">工作台近 14 天只看发布次数。本页按时间窗拆开：成败趋势、失败落在哪、日志错误类型、告警走势。</p>
     </div>
     <div class="charts">
       <section class="panel panel-wide">

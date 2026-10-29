@@ -2,12 +2,9 @@ package com.example.service;
 
 import com.example.common.enums.RoleEnum;
 import com.example.entity.Account;
-import com.example.entity.Admin;
-import com.example.entity.Ops;
+import com.example.entity.Person;
 import com.example.entity.PersonMailAddress;
-import com.example.mapper.AdminMapper;
-import com.example.mapper.DevMapper;
-import com.example.mapper.OpsMapper;
+import com.example.mapper.PersonMapper;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -21,6 +18,7 @@ import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.when;
 
@@ -28,37 +26,35 @@ import static org.mockito.Mockito.when;
 class PersonMailServiceTest {
 
     @Mock
-    private AdminMapper adminMapper;
-    @Mock
-    private OpsMapper opsMapper;
-    @Mock
-    private DevMapper devMapper;
+    private PersonMapper personMapper;
 
     @InjectMocks
     private PersonMailService personMailService;
 
     @Test
-    void emailOf_readsAdminTableByUsername() {
+    void emailOf_readsPersonTableByUsernameAndRole() {
         Account account = new Account();
         account.setUsername("admin");
         account.setRole(RoleEnum.ADMIN.name());
-        Admin admin = new Admin();
+        Person admin = new Person();
+        admin.setRole(RoleEnum.ADMIN.name());
         admin.setEmail("  admin@devops.com ");
-        when(adminMapper.selectByUsername("admin")).thenReturn(admin);
+        when(personMapper.selectByUsername("admin")).thenReturn(admin);
 
         assertEquals("admin@devops.com", personMailService.emailOf(account));
     }
 
     @Test
-    void emailOf_looksUpOpsTableByUsername() {
+    void emailOf_rejectsRoleThatDoesNotMatchTheRow() {
         Account account = new Account();
         account.setUsername("ops1");
-        account.setRole(RoleEnum.OPS.name());
-        Ops ops = new Ops();
+        account.setRole(RoleEnum.DEV.name());
+        Person ops = new Person();
+        ops.setRole(RoleEnum.OPS.name());
         ops.setEmail("ops1@example.com");
-        when(opsMapper.selectByUsername("ops1")).thenReturn(ops);
+        when(personMapper.selectByUsername("ops1")).thenReturn(ops);
 
-        assertEquals("ops1@example.com", personMailService.emailOf(account));
+        assertNull(personMailService.emailOf(account));
     }
 
     @Test
@@ -66,13 +62,11 @@ class PersonMailServiceTest {
         Account sender = new Account();
         sender.setUsername("ops1");
         sender.setRole(RoleEnum.OPS.name());
-        when(adminMapper.selectNotifyMails()).thenReturn(Collections.singletonList(
-                new PersonMailAddress("admin", "超级管理员", "admin@example.com")));
-        when(opsMapper.selectNotifyMails()).thenReturn(Arrays.asList(
-                new PersonMailAddress("ops1", "王强", "same@qq.com"),
-                new PersonMailAddress("ops2", "赵敏", "ops2@example.com")));
-        when(devMapper.selectNotifyMails()).thenReturn(Collections.singletonList(
-                new PersonMailAddress("dev1", "张伟", "same@qq.com")));
+        when(personMapper.selectNotifyMails()).thenReturn(Arrays.asList(
+                new PersonMailAddress("admin", "超级管理员", "admin@example.com", RoleEnum.ADMIN.name()),
+                new PersonMailAddress("ops1", "王强", "same@qq.com", RoleEnum.OPS.name()),
+                new PersonMailAddress("ops2", "赵敏", "ops2@example.com", RoleEnum.OPS.name()),
+                new PersonMailAddress("dev1", "张伟", "same@qq.com", RoleEnum.DEV.name())));
 
         List<PersonMailAddress> people = personMailService.notifyRecipients(sender);
         List<String> displays = people.stream().map(PersonMailAddress::display).collect(Collectors.toList());
@@ -87,12 +81,10 @@ class PersonMailServiceTest {
         Account sender = new Account();
         sender.setUsername("dev1");
         sender.setRole(RoleEnum.DEV.name());
-        when(adminMapper.selectNotifyMails()).thenReturn(Collections.emptyList());
-        when(opsMapper.selectNotifyMails()).thenReturn(Collections.singletonList(
-                new PersonMailAddress("ops1", "张伟", "ops-zhang@example.com")));
-        when(devMapper.selectNotifyMails()).thenReturn(Arrays.asList(
-                new PersonMailAddress("dev1", "张伟", "dev1@example.com"),
-                new PersonMailAddress("dev3", "张伟", "dev3@example.com")));
+        when(personMapper.selectNotifyMails()).thenReturn(Arrays.asList(
+                new PersonMailAddress("ops1", "张伟", "ops-zhang@example.com", RoleEnum.OPS.name()),
+                new PersonMailAddress("dev1", "张伟", "dev1@example.com", RoleEnum.DEV.name()),
+                new PersonMailAddress("dev3", "张伟", "dev3@example.com", RoleEnum.DEV.name())));
 
         List<PersonMailAddress> people = personMailService.notifyRecipients(sender);
         List<String> displays = people.stream().map(PersonMailAddress::display).collect(Collectors.toList());
@@ -106,11 +98,9 @@ class PersonMailServiceTest {
         Account sender = new Account();
         sender.setUsername("ops1");
         sender.setRole(RoleEnum.OPS.name());
-        when(adminMapper.selectNotifyMails()).thenReturn(Collections.emptyList());
-        when(opsMapper.selectNotifyMails()).thenReturn(Collections.emptyList());
-        when(devMapper.selectNotifyMails()).thenReturn(Arrays.asList(
-                new PersonMailAddress("dev1", "张伟", "  Dev1@example.com "),
-                new PersonMailAddress("dev1", "张伟", "dev1@example.com")));
+        when(personMapper.selectNotifyMails()).thenReturn(Arrays.asList(
+                new PersonMailAddress("dev1", "张伟", "  Dev1@example.com ", RoleEnum.DEV.name()),
+                new PersonMailAddress("dev1", "张伟", "dev1@example.com", RoleEnum.DEV.name())));
 
         List<PersonMailAddress> people = personMailService.notifyRecipients(sender);
         assertEquals(1, people.size());
@@ -133,9 +123,7 @@ class PersonMailServiceTest {
         Account sender = new Account();
         sender.setUsername("ops1");
         sender.setRole(RoleEnum.OPS.name());
-        when(adminMapper.selectNotifyMails()).thenReturn(Collections.emptyList());
-        when(opsMapper.selectNotifyMails()).thenReturn(Collections.emptyList());
-        when(devMapper.selectNotifyMails()).thenReturn(Collections.emptyList());
+        when(personMapper.selectNotifyMails()).thenReturn(Collections.emptyList());
         assertTrue(personMailService.notifyRecipients(sender).isEmpty());
     }
 }

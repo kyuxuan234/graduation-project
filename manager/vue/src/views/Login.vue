@@ -81,6 +81,9 @@
 const ROLES = [
   { value: 'ADMIN', name: '超级管理员', username: 'admin', password: 'admin', text: 'admin / admin' },
   { value: 'DEV', name: '开发', username: 'dev1', password: '123456', text: 'dev1 / 123456' },
+  { value: 'TL', name: '技术负责人', username: 'tl1', password: '123456', text: 'tl1 / 123456' },
+  { value: 'QA', name: '测试', username: 'qa1', password: '123456', text: 'qa1 / 123456' },
+  { value: 'PM', name: '产品经理', username: 'pm1', password: '123456', text: 'pm1 / 123456' },
   { value: 'OPS', name: '运维', username: 'ops1', password: '123456', text: 'ops1 / 123456' },
 ]
 
@@ -390,6 +393,7 @@ h1 { font-size: 20px; font-weight: 700; margin-bottom: 4px; color: #e6f4f2; }
 
 .roles {
   display: flex;
+  flex-wrap: wrap;
   gap: 6px;
   margin-bottom: 14px;
   background: rgba(3, 16, 18, .55);
@@ -399,9 +403,9 @@ h1 { font-size: 20px; font-weight: 700; margin-bottom: 4px; color: #e6f4f2; }
 }
 
 .role {
-  flex: 1;
+  flex: 1 1 30%;
   text-align: center;
-  padding: 8px 0;
+  padding: 8px 4px;
   font-size: 13px;
   border-radius: 8px;
   cursor: pointer;

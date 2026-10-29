@@ -101,6 +101,17 @@ public class DeployController {
     }
 
     /**
+     * 技术审查、测试验收、产品验收。result 取 PASS 或 REJECTED。
+     */
+    @PutMapping("/gate/{id}")
+    public Result<Void> gate(@PathVariable Integer id,
+                             @RequestParam String result,
+                             @RequestParam(required = false) String remark) {
+        deployService.gate(id, result, remark);
+        return Result.success();
+    }
+
+    /**
      * 开始部署
      */
     @PutMapping("/startDeploy/{id}")

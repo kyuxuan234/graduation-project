@@ -12,6 +12,7 @@ import com.example.common.enums.DeployStatusEnum;
 import com.example.common.enums.DeployTypeEnum;
 import com.example.common.enums.ResultCodeEnum;
 import com.example.common.enums.RoleEnum;
+import com.example.common.enums.ServerEnvEnum;
 import com.example.dto.DeployExecSummaryVO;
 import com.example.dto.DeployLogLinesVO;
 import com.example.entity.Account;
@@ -19,11 +20,13 @@ import com.example.entity.App;
 import com.example.entity.Deploy;
 import com.example.entity.DeployExecution;
 import com.example.entity.DeployLog;
+import com.example.entity.Server;
 import com.example.exception.BusinessException;
 import com.example.mapper.AppMapper;
 import com.example.mapper.DeployExecutionMapper;
 import com.example.mapper.DeployLogMapper;
 import com.example.mapper.DeployMapper;
+import com.example.mapper.ServerMapper;
 import com.example.utils.AuthUtils;
 import com.example.utils.TokenUtils;
 import com.github.pagehelper.PageHelper;
@@ -33,6 +36,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import javax.annotation.Resource;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.Date;
 import java.util.List;
@@ -45,6 +49,9 @@ public class DeployService {
 
     @Resource
     private DeployMapper deployMapper;
+
+    @Resource
+    private ServerMapper serverMapper;
 
     @Resource
     private DeployLogMapper deployLogMapper;
@@ -65,20 +72,26 @@ public class DeployService {
         if (ObjectUtil.isNull(dbApp)) {
             throw new BusinessException(ResultCodeEnum.APP_NOT_EXIST_ERROR);
         }
-        deploy.setDeployNo(generateDeployNo());
-        deploy.setStatus(DeployStatusEnum.PENDING.name());
-        deploy.setApplicant(currentUser.getUsername());
-        deploy.setApplyTime(DateUtil.now());
-        if (ObjectUtil.isEmpty(deploy.getDeployType())) {
-            deploy.setDeployType(DeployTypeEnum.FULL.name());
+        if (StrUtil.isBlank(dbApp.getRepoUrl())) {
+            throw new BusinessException(ResultCodeEnum.PARAM_ERROR.code, "应用未配置代码仓库地址，无法生成拉取脚本");
         }
-        deploy.setExecuteMode(normalizeExecuteMode(deploy.getExecuteMode()));
         if (ObjectUtil.isNull(deploy.getServerId())) {
             deploy.setServerId(dbApp.getServerId());
         }
+        Server server = serverMapper.selectById(deploy.getServerId());
+        if (ObjectUtil.isNull(server)) {
+            throw new BusinessException(ResultCodeEnum.SERVER_NOT_EXIST_ERROR);
+        }
+        String env = server.getEnv();
+        deploy.setDeployNo(generateDeployNo());
+        deploy.setStatus(initialStatus(env));
+        deploy.setDeployType(DeployTypeEnum.FULL.name());
+        deploy.setApplicant(currentUser.getUsername());
+        deploy.setApplyTime(DateUtil.now());
+        deploy.setExecuteMode(normalizeExecuteMode(deploy.getExecuteMode()));
         deployMapper.insert(deploy);
         saveLog(deploy.getId(), DeployActionEnum.APPLY, currentUser.getUsername(),
-                "提交部署申请，目标版本：" + deploy.getVersion());
+                "提交发布申请，环境：" + envLabel(env) + "，目标版本：" + deploy.getVersion());
     }
 
     /**
@@ -107,6 +120,37 @@ public class DeployService {
             detail = detail + "，意见：" + remark;
         }
         saveLog(id, action, approver, detail);
+    }
+
+    /**
+     * 技术审查、测试验收、产品验收。result 取 PASS 或 REJECTED。
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public void gate(Integer id, String result, String remark) {
+        Deploy dbDeploy = getExistDeploy(id);
+        if (!DeployStatusMachine.isReviewGate(dbDeploy.getStatus())) {
+            throw new BusinessException(ResultCodeEnum.DEPLOY_STATUS_ERROR);
+        }
+        RoleEnum owner = reviewRole(dbDeploy.getStatus());
+        Account currentUser = AuthUtils.requireRole(ResultCodeEnum.DEPLOY_GATE_NO_PERMISSION, owner);
+        boolean pass = "PASS".equals(result);
+        if (!pass && !DeployStatusEnum.REJECTED.name().equals(result)) {
+            throw new BusinessException(ResultCodeEnum.DEPLOY_STATUS_ERROR);
+        }
+        String next = pass ? DeployStatusMachine.passTarget(dbDeploy.getStatus(), targetEnv(dbDeploy)) : DeployStatusEnum.REJECTED.name();
+        String operator = currentUser.getUsername();
+        int version = dbDeploy.getRowVersion() == null ? 0 : dbDeploy.getRowVersion();
+        int rows = deployMapper.casApprove(id, dbDeploy.getStatus(), version,
+                next, operator, DateUtil.now(), remark);
+        if (rows == 0) {
+            throw new BusinessException(ResultCodeEnum.DEPLOY_CONFLICT);
+        }
+        String stage = reviewStage(dbDeploy.getStatus());
+        String detail = pass ? stage + "通过" : stage + "驳回";
+        if (ObjectUtil.isNotEmpty(remark)) {
+            detail = detail + "，意见：" + remark;
+        }
+        saveLog(id, pass ? DeployActionEnum.APPROVE : DeployActionEnum.REJECT, operator, detail);
     }
 
     /**
@@ -273,6 +317,66 @@ public class DeployService {
         return lines;
     }
 
+    private String initialStatus(String env) {
+        if (ServerEnvEnum.DEV.name().equals(env)) {
+            return DeployStatusEnum.PENDING.name();
+        }
+        if (ServerEnvEnum.TEST.name().equals(env)) {
+            return DeployStatusEnum.TESTING.name();
+        }
+        return DeployStatusEnum.REVIEW.name();
+    }
+
+    private String targetEnv(Deploy deploy) {
+        if (deploy.getServerId() == null) {
+            return ServerEnvEnum.PROD.name();
+        }
+        Server server = serverMapper.selectById(deploy.getServerId());
+        if (server == null || StrUtil.isBlank(server.getEnv())) {
+            return ServerEnvEnum.PROD.name();
+        }
+        return server.getEnv();
+    }
+
+    private String envLabel(String env) {
+        if (ServerEnvEnum.DEV.name().equals(env)) {
+            return "开发";
+        }
+        if (ServerEnvEnum.TEST.name().equals(env)) {
+            return "测试";
+        }
+        if (ServerEnvEnum.PROD.name().equals(env)) {
+            return "生产";
+        }
+        return StrUtil.blankToDefault(env, "生产");
+    }
+
+    private RoleEnum reviewRole(String status) {
+        if (DeployStatusEnum.REVIEW.name().equals(status)) {
+            return RoleEnum.TL;
+        }
+        if (DeployStatusEnum.TESTING.name().equals(status)) {
+            return RoleEnum.QA;
+        }
+        if (DeployStatusEnum.ACCEPTING.name().equals(status)) {
+            return RoleEnum.PM;
+        }
+        return null;
+    }
+
+    private String reviewStage(String status) {
+        if (DeployStatusEnum.REVIEW.name().equals(status)) {
+            return "技术审查";
+        }
+        if (DeployStatusEnum.TESTING.name().equals(status)) {
+            return "测试验收";
+        }
+        if (DeployStatusEnum.ACCEPTING.name().equals(status)) {
+            return "产品验收";
+        }
+        return "审查";
+    }
+
     private void rememberRollbackTarget(Deploy dbDeploy) {
         if (ObjectUtil.isNotEmpty(dbDeploy.getRollbackVersion())) {
             return;
@@ -332,7 +436,7 @@ public class DeployService {
     }
 
     /**
-     * DEV 只能操作自己提交且仍在待审批的部署单
+     * DEV 只能操作自己提交、且仍在待技术审查的发布单
      */
     private void checkOwnPendingForDev(Deploy dbDeploy) {
         Account currentUser = TokenUtils.getCurrentUser();
@@ -340,7 +444,7 @@ public class DeployService {
             return;
         }
         boolean own = currentUser.getUsername().equals(dbDeploy.getApplicant());
-        boolean pending = DeployStatusEnum.PENDING.name().equals(dbDeploy.getStatus());
+        boolean pending = DeployStatusEnum.REVIEW.name().equals(dbDeploy.getStatus());
         if (!own || !pending) {
             throw new BusinessException(ResultCodeEnum.DEPLOY_NOT_OWNER_ERROR);
         }
@@ -350,13 +454,21 @@ public class DeployService {
      * 根据ID查询
      */
     public Deploy selectById(Integer id) {
-        return deployMapper.selectById(id);
+        Deploy deploy = deployMapper.selectById(id);
+        if (deploy != null && !canView(deploy)) {
+            throw new BusinessException(ResultCodeEnum.NO_PERMISSION_ERROR);
+        }
+        return deploy;
     }
 
     /**
      * 查询所有
      */
     public List<Deploy> selectAll(Deploy deploy) {
+        if (deploy == null) {
+            deploy = new Deploy();
+        }
+        applyVisibility(deploy);
         return deployMapper.selectAll(deploy);
     }
 
@@ -364,9 +476,86 @@ public class DeployService {
      * 分页查询
      */
     public PageInfo<Deploy> selectPage(Deploy deploy, Integer pageNum, Integer pageSize) {
+        if (deploy == null) {
+            deploy = new Deploy();
+        }
+        applyVisibility(deploy);
         PageHelper.startPage(pageNum, pageSize);
         List<Deploy> list = deployMapper.selectAll(deploy);
         return PageInfo.of(list);
+    }
+
+    /**
+     * 按角色和环境只露出本人该处理的发布单。超级管理员仍看全部。
+     */
+    private void applyVisibility(Deploy query) {
+        Account currentUser = TokenUtils.getCurrentUser();
+        String role = currentUser == null ? null : currentUser.getRole();
+        if (role == null || RoleEnum.ADMIN.name().equals(role)) {
+            return;
+        }
+        if (RoleEnum.DEV.name().equals(role)) {
+            query.setApplicant(null);
+            query.setScopeApplicant(currentUser.getUsername());
+            return;
+        }
+        if (RoleEnum.TL.name().equals(role)) {
+            query.setStatus(DeployStatusEnum.REVIEW.name());
+            query.setScopeEnv(ServerEnvEnum.PROD.name());
+            return;
+        }
+        if (RoleEnum.QA.name().equals(role)) {
+            query.setStatus(DeployStatusEnum.TESTING.name());
+            return;
+        }
+        if (RoleEnum.PM.name().equals(role)) {
+            query.setStatus(DeployStatusEnum.ACCEPTING.name());
+            query.setScopeEnv(ServerEnvEnum.PROD.name());
+            return;
+        }
+        if (RoleEnum.OPS.name().equals(role)) {
+            List<String> allowed = Arrays.asList(
+                    DeployStatusEnum.PENDING.name(),
+                    DeployStatusEnum.APPROVED.name(),
+                    DeployStatusEnum.DEPLOYING.name(),
+                    DeployStatusEnum.SUCCESS.name(),
+                    DeployStatusEnum.FAILED.name());
+            if (query.getStatus() == null || !allowed.contains(query.getStatus())) {
+                query.setStatus(null);
+                query.setScopeStatuses(allowed);
+            }
+        }
+    }
+
+    private boolean canView(Deploy deploy) {
+        Account currentUser = TokenUtils.getCurrentUser();
+        String role = currentUser == null ? null : currentUser.getRole();
+        if (role == null || RoleEnum.ADMIN.name().equals(role)) {
+            return true;
+        }
+        if (RoleEnum.DEV.name().equals(role)) {
+            return currentUser.getUsername().equals(deploy.getApplicant());
+        }
+        if (RoleEnum.TL.name().equals(role)) {
+            return DeployStatusEnum.REVIEW.name().equals(deploy.getStatus())
+                    && ServerEnvEnum.PROD.name().equals(deploy.getServerEnv());
+        }
+        if (RoleEnum.QA.name().equals(role)) {
+            return DeployStatusEnum.TESTING.name().equals(deploy.getStatus());
+        }
+        if (RoleEnum.PM.name().equals(role)) {
+            return DeployStatusEnum.ACCEPTING.name().equals(deploy.getStatus())
+                    && ServerEnvEnum.PROD.name().equals(deploy.getServerEnv());
+        }
+        if (RoleEnum.OPS.name().equals(role)) {
+            String status = deploy.getStatus();
+            return DeployStatusEnum.PENDING.name().equals(status)
+                    || DeployStatusEnum.APPROVED.name().equals(status)
+                    || DeployStatusEnum.DEPLOYING.name().equals(status)
+                    || DeployStatusEnum.SUCCESS.name().equals(status)
+                    || DeployStatusEnum.FAILED.name().equals(status);
+        }
+        return false;
     }
 
     private String normalizeExecuteMode(String mode) {

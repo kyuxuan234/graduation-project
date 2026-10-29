@@ -94,7 +94,10 @@
       </section>
 
       <section class="ops-panel p-apps">
-        <h3><i class="el-icon-s-platform"></i>应用风险</h3>
+        <div class="panel-head">
+          <h3><i class="el-icon-s-platform"></i>应用风险</h3>
+          <a class="panel-more" href="javascript:;" @click.prevent="go('/app')">更多</a>
+        </div>
         <table class="ops-table">
           <thead>
             <tr>
@@ -107,7 +110,7 @@
             </tr>
           </thead>
           <tbody>
-            <tr v-for="row in appRisk" :key="row.id">
+            <tr v-for="row in appRiskPreview" :key="row.id">
               <td class="clickable" @click="go('/app', { id: row.id })"><i class="el-icon-s-platform"></i>{{ row.name }}</td>
               <td class="clickable" @click="go('/deploy', { appId: row.id })">{{ num(row.deployCount) }}</td>
               <td class="clickable" @click="go('/alarm', { appId: row.id })">{{ num(row.alarmCount) }}</td>
@@ -117,7 +120,7 @@
                 <span class="risk" :class="riskLevel(row).tone"><i :class="riskLevel(row).icon"></i>{{ riskLevel(row).name }}</span>
               </td>
             </tr>
-            <tr v-if="!appRisk.length"><td colspan="6" class="empty">暂无应用数据</td></tr>
+            <tr v-if="!appRiskPreview.length"><td colspan="6" class="empty">暂无应用数据</td></tr>
           </tbody>
         </table>
       </section>
@@ -141,7 +144,10 @@ import OsLogo from '@/components/OsLogo'
 import { canOps } from '@/utils/person'
 
 const DEPLOY_STATUS = [
-  { value: 'PENDING', name: '待审批', tone: 'warn', icon: 'el-icon-time' },
+  { value: 'REVIEW', name: '待技术审查', tone: 'warn', icon: 'el-icon-view' },
+  { value: 'TESTING', name: '待测试验收', tone: 'warn', icon: 'el-icon-s-check' },
+  { value: 'ACCEPTING', name: '待产品验收', tone: 'warn', icon: 'el-icon-s-claim' },
+  { value: 'PENDING', name: '待运维审批', tone: 'warn', icon: 'el-icon-time' },
   { value: 'APPROVED', name: '已批准', tone: 'cyan', icon: 'el-icon-check' },
   { value: 'DEPLOYING', name: '部署中', tone: 'cyan', icon: 'el-icon-loading' },
   { value: 'SUCCESS', name: '已交付', tone: 'ok', icon: 'el-icon-circle-check' },
@@ -258,8 +264,11 @@ export default {
     },
     roleTip() {
       const map = {
-        DEV: '你的主线：选应用 → 新建发布申请 → 等运维审批执行',
-        OPS: '你的主线：审批部署单 → 自动/手动执行 → 接手告警闭环',
+        DEV: '开发环境提交后直接等运维；测试环境先由测试验收；生产环境依次经过技术审查、测试验收和产品验收',
+        TL: '你只处理生产环境的技术审查，通过后进入测试验收',
+        QA: '测试环境验收通过后交给运维；生产环境验收通过后交给产品经理',
+        PM: '你只处理生产环境、且测试已通过的发布单',
+        OPS: '各环境完成本环境要求的审查验收后，由你审批并执行',
         ADMIN: '全流程可见：项目 / 服务器 / 应用 / 部署 / 告警 / 人员'
       }
       return map[this.user.role] || '发布管理系统工作台'
@@ -269,17 +278,24 @@ export default {
     },
     alarmMax() {
       return Math.max(1, ...this.alarmBars.map(v => v.count))
+    },
+    appRiskPreview() {
+      return (this.appRisk || []).slice(0, 5)
     }
   },
   created() {
-    this.loadCount()
-    this.loadDeployStatus()
-    this.loadAlarmStatus()
-    this.loadAppRisk()
-    this.loadServers()
+    if (this.user.role === 'ADMIN') {
+      this.loadCount()
+      this.loadDeployStatus()
+      this.loadAlarmStatus()
+      this.loadAppRisk()
+      this.loadServers()
+      this.loadTrend14()
+    } else {
+      this.loadOwnBoard()
+    }
     this.loadRecentDeploys()
     this.loadNotices()
-    this.loadTrend14()
     this.tickerTimer = setInterval(() => {
       if (this.tickerItems.length) {
         this.tickerIndex = (this.tickerIndex + 1) % this.tickerItems.length
@@ -296,12 +312,20 @@ export default {
   },
   methods: {
     go(path, query) {
+      if (path === '/alarm' && !canOps(this.user)) {
+        this.$message.info('发布告警由运维处置')
+        return
+      }
+      if (path === '/analysis' && !canOps(this.user)) {
+        this.$message.info('发布报表由运维查看')
+        return
+      }
       if (path === '/server' && !canOps(this.user)) {
         this.$message.info('服务器由运维管理，开发可在应用中选择部署机')
         return
       }
-      if (path === '/project' && this.user.role === 'OPS') {
-        this.$message.info('项目管理面向开发与管理员')
+      if (path === '/project' && this.user.role !== 'DEV' && this.user.role !== 'ADMIN') {
+        this.$message.info('业务项目由开发维护')
         return
       }
       this.$router.push(query ? { path, query } : path)
@@ -327,6 +351,136 @@ export default {
       if (critical >= 1 || failed >= 1 || open >= 2) return { name: '高', tone: 'danger', icon: 'el-icon-warning' }
       if (open >= 1) return { name: '中', tone: 'warn', icon: 'el-icon-info' }
       return { name: '低', tone: 'ok', icon: 'el-icon-success' }
+    },
+    loadOwnBoard() {
+      const role = this.user.role
+      const jobs = [this.$request.get('/deploy/selectAll')]
+      if (role === 'OPS') {
+        jobs.push(this.$request.get('/server/selectPage', { params: { pageNum: 1, pageSize: 500 } }))
+        jobs.push(this.$request.get('/app/selectAll'))
+        jobs.push(this.$request.get('/alarm/selectAll'))
+        jobs.push(this.$request.get('/project/selectAll'))
+      } else if (role === 'DEV') {
+        jobs.push(this.$request.get('/server/selectAll'))
+        jobs.push(this.$request.get('/app/selectAll'))
+        jobs.push(this.$request.get('/project/selectAll'))
+      } else {
+        jobs.push(this.$request.get('/server/selectAll'))
+        jobs.push(this.$request.get('/app/selectAll'))
+      }
+      Promise.all(jobs).then(responses => {
+        const deploys = responses[0].data || []
+        const servers = role === 'OPS'
+          ? ((responses[1].data && responses[1].data.list) || [])
+          : (responses[1].data || [])
+        const apps = (responses[2] && responses[2].data) || []
+        const alarms = role === 'OPS' ? ((responses[3] && responses[3].data) || []) : []
+        const projects = role === 'OPS'
+          ? ((responses[4] && responses[4].data) || [])
+          : ((responses[3] && responses[3].data) || [])
+        this.applyOwnDeploys(deploys)
+        this.applyOwnAssets(deploys, servers, apps, projects, alarms)
+      }).catch(() => {})
+    },
+    applyOwnDeploys(list) {
+      const countMap = {}
+      DEPLOY_STATUS.forEach(item => { countMap[item.value] = 0 })
+      list.forEach(row => {
+        if (countMap[row.status] != null) countMap[row.status] += 1
+      })
+      this.deployBars = DEPLOY_STATUS.map(item => ({ ...item, count: countMap[item.value] || 0 }))
+      this.deploySuccessCount = countMap.SUCCESS || 0
+      this.deployFinishedCount = this.deploySuccessCount + (countMap.FAILED || 0)
+      this.deploySuccessRate = this.deployFinishedCount
+        ? Math.round(this.deploySuccessCount * 100 / this.deployFinishedCount) : 0
+      const role = this.user.role
+      let pending = list.length
+      if (role === 'DEV') {
+        pending = list.filter(row => !['SUCCESS', 'FAILED', 'REJECTED'].includes(row.status)).length
+      } else if (role === 'OPS') {
+        pending = list.filter(row => ['PENDING', 'APPROVED', 'DEPLOYING'].includes(row.status)).length
+      }
+      this.count = Object.assign({}, this.count, { pendingDeployCount: pending })
+      this.renderTrend(this.trendFromDeploys(list))
+    },
+    trendFromDeploys(list) {
+      const days = []
+      const now = new Date()
+      for (let i = 13; i >= 0; i--) {
+        const date = new Date(now.getFullYear(), now.getMonth(), now.getDate() - i)
+        const month = String(date.getMonth() + 1).padStart(2, '0')
+        const day = String(date.getDate()).padStart(2, '0')
+        days.push(date.getFullYear() + '-' + month + '-' + day)
+      }
+      const countMap = {}
+      days.forEach(day => { countMap[day] = 0 })
+      list.forEach(row => {
+        const day = String(row.applyTime || '').slice(0, 10)
+        if (countMap[day] != null) countMap[day] += 1
+      })
+      return days.map(day => ({ date: day, count: countMap[day] }))
+    },
+    applyOwnAssets(deploys, servers, apps, projects, alarms) {
+      const role = this.user.role
+      const serverIds = {}
+      const appIds = {}
+      deploys.forEach(row => {
+        if (row.serverId) serverIds[row.serverId] = true
+        if (row.appId) appIds[row.appId] = true
+      })
+      let serverList = servers
+      let appList = apps
+      if (role === 'TL' || role === 'QA' || role === 'PM' || role === 'DEV') {
+        serverList = servers.filter(row => serverIds[row.id])
+      }
+      if (role === 'TL' || role === 'QA' || role === 'PM') {
+        appList = apps.filter(row => appIds[row.id])
+      }
+      const osCount = { centos: 0, ubuntu: 0 }
+      const envCount = { DEV: 0, TEST: 0, PROD: 0 }
+      const serverStatus = { RUNNING: 0, STOPPED: 0, MAINTENANCE: 0 }
+      serverList.forEach(row => {
+        const os = String(row.os || '').toLowerCase()
+        if (os.includes('ubuntu')) osCount.ubuntu += 1
+        else if (os.includes('centos')) osCount.centos += 1
+        if (envCount[row.env] != null) envCount[row.env] += 1
+        if (serverStatus[row.status] != null) serverStatus[row.status] += 1
+      })
+      this.osCount = osCount
+      this.envCount = envCount
+      this.serverStatus = serverStatus
+      const projectIds = {}
+      appList.forEach(row => {
+        if (row.projectId) projectIds[row.projectId] = true
+      })
+      const projectCount = role === 'DEV' ? projects.length : Object.keys(projectIds).length
+      const onlineAppCount = appList.filter(row => row.status === 'ONLINE').length
+      const alarmCountMap = { UNHANDLED: 0, HANDLING: 0, RESOLVED: 0 }
+      ;(alarms || []).forEach(row => {
+        if (alarmCountMap[row.status] != null) alarmCountMap[row.status] += 1
+      })
+      this.alarmBars = ALARM_STATUS.map(item => ({ ...item, count: alarmCountMap[item.value] || 0 }))
+      this.alarmResolvedCount = alarmCountMap.RESOLVED
+      this.alarmTotalCount = this.alarmBars.reduce((sum, item) => sum + item.count, 0)
+      this.alarmResolveRate = this.alarmTotalCount
+        ? Math.round(this.alarmResolvedCount * 100 / this.alarmTotalCount) : 0
+      this.count = Object.assign({}, this.count, {
+        projectCount: projectCount,
+        serverCount: serverList.length,
+        appCount: appList.length,
+        onlineAppCount: onlineAppCount,
+        unhandledAlarmCount: alarmCountMap.UNHANDLED
+      })
+      const byApp = {}
+      deploys.forEach(row => {
+        if (!row.appId) return
+        if (!byApp[row.appId]) {
+          byApp[row.appId] = { id: row.appId, name: row.appName || ('应用' + row.appId), deployCount: 0, failedDeployCount: 0, alarmCount: 0, openAlarmCount: 0, alarmAfterSuccess: 0, criticalOpenCount: 0 }
+        }
+        byApp[row.appId].deployCount += 1
+        if (row.status === 'FAILED') byApp[row.appId].failedDeployCount += 1
+      })
+      this.appRisk = Object.keys(byApp).map(key => byApp[key])
     },
     loadCount() {
       this.$request.get('/statistics/count').then(res => {
@@ -363,46 +517,48 @@ export default {
     },
     loadTrend14() {
       this.$request.get('/statistics/deployTrend14').then(res => {
-        const rows = res.data || []
-        this.$nextTick(() => {
-          if (!this.$refs.trend14) return
-          if (!this.trendChart) this.trendChart = echarts.init(this.$refs.trend14)
-          this.trendChart.setOption({
-            backgroundColor: 'transparent',
-            grid: { left: 8, right: 12, top: 16, bottom: 4, containLabel: true },
-            tooltip: { trigger: 'axis' },
-            xAxis: {
-              type: 'category',
-              data: rows.map(v => String(v.date).slice(5)),
-              axisLine: { lineStyle: { color: 'rgba(61, 231, 255, 0.25)' } },
-              axisLabel: { color: '#7aa8b8', fontSize: 11 }
-            },
-            yAxis: {
-              type: 'value',
-              minInterval: 1,
-              splitLine: { lineStyle: { color: 'rgba(61, 231, 255, 0.1)' } },
-              axisLabel: { color: '#7aa8b8', fontSize: 11 }
-            },
-            series: [{
-              type: 'line',
-              data: rows.map(v => v.count),
-              smooth: true,
-              symbolSize: 6,
-              itemStyle: { color: '#3de7ff' },
-              lineStyle: { color: '#3de7ff', width: 2 },
-              areaStyle: {
-                color: {
-                  type: 'linear', x: 0, y: 0, x2: 0, y2: 1,
-                  colorStops: [
-                    { offset: 0, color: 'rgba(61, 231, 255, 0.35)' },
-                    { offset: 1, color: 'rgba(61, 231, 255, 0.02)' }
-                  ]
-                }
+        this.renderTrend(res.data || [])
+      })
+    },
+    renderTrend(rows) {
+      this.$nextTick(() => {
+        if (!this.$refs.trend14) return
+        if (!this.trendChart) this.trendChart = echarts.init(this.$refs.trend14)
+        this.trendChart.setOption({
+          backgroundColor: 'transparent',
+          grid: { left: 8, right: 12, top: 16, bottom: 4, containLabel: true },
+          tooltip: { trigger: 'axis' },
+          xAxis: {
+            type: 'category',
+            data: rows.map(v => String(v.date).slice(5)),
+            axisLine: { lineStyle: { color: 'rgba(61, 231, 255, 0.25)' } },
+            axisLabel: { color: '#7aa8b8', fontSize: 11 }
+          },
+          yAxis: {
+            type: 'value',
+            minInterval: 1,
+            splitLine: { lineStyle: { color: 'rgba(61, 231, 255, 0.1)' } },
+            axisLabel: { color: '#7aa8b8', fontSize: 11 }
+          },
+          series: [{
+            type: 'line',
+            data: rows.map(v => v.count),
+            smooth: true,
+            symbolSize: 6,
+            itemStyle: { color: '#3de7ff' },
+            lineStyle: { color: '#3de7ff', width: 2 },
+            areaStyle: {
+              color: {
+                type: 'linear', x: 0, y: 0, x2: 0, y2: 1,
+                colorStops: [
+                  { offset: 0, color: 'rgba(61, 231, 255, 0.35)' },
+                  { offset: 1, color: 'rgba(61, 231, 255, 0.02)' }
+                ]
               }
-            }]
-          })
-          this.trendChart.resize()
+            }
+          }]
         })
+        this.trendChart.resize()
       })
     },
     loadServers() {
@@ -556,6 +712,31 @@ export default {
   font-weight: 600;
   color: #7af0ff;
   letter-spacing: 1px;
+}
+
+.panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.panel-head h3 {
+  margin: 0;
+}
+
+.panel-more {
+  flex-shrink: 0;
+  color: #7af0ff;
+  font-size: 12px;
+  text-decoration: none;
+  opacity: 0.85;
+}
+
+.panel-more:hover {
+  opacity: 1;
+  text-decoration: underline;
 }
 
 .ops-panel h3 i,

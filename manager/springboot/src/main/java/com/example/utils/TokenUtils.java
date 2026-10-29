@@ -7,11 +7,10 @@ import com.auth0.jwt.JWTVerifier;
 import com.auth0.jwt.algorithms.Algorithm;
 import com.auth0.jwt.exceptions.JWTVerificationException;
 import com.example.common.Constants;
-import com.example.common.enums.RoleEnum;
+import com.example.common.enums.AccountStatusEnum;
 import com.example.entity.Account;
-import com.example.service.AdminService;
-import com.example.service.DevService;
-import com.example.service.OpsService;
+import com.example.entity.Person;
+import com.example.service.PersonService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -32,9 +31,7 @@ public class TokenUtils {
 
     private static final Logger log = LoggerFactory.getLogger(TokenUtils.class);
 
-    private static AdminService staticAdminService;
-    private static DevService staticDevService;
-    private static OpsService staticOpsService;
+    private static PersonService staticPersonService;
     private static String staticJwtSecret;
     private static final ThreadLocal<Account> BOUND_USER = new ThreadLocal<Account>();
 
@@ -50,22 +47,14 @@ public class TokenUtils {
     }
 
     @Resource
-    AdminService adminService;
-
-    @Resource
-    DevService devService;
-
-    @Resource
-    OpsService opsService;
+    PersonService personService;
 
     @Value("${jwt.secret:devops-jwt-local-secret-2026}")
     private String jwtSecret;
 
     @PostConstruct
     public void setUserService() {
-        staticAdminService = adminService;
-        staticDevService = devService;
-        staticOpsService = opsService;
+        staticPersonService = personService;
         staticJwtSecret = jwtSecret;
     }
 
@@ -89,21 +78,11 @@ public class TokenUtils {
      * 校验 token 并查出账号。握手请求不在业务线程里，调用方自己传入 token。
      */
     public static Account verifyToken(String token) {
-        if (ObjectUtil.isEmpty(token) || staticAdminService == null) {
+        if (ObjectUtil.isEmpty(token) || staticPersonService == null) {
             return null;
         }
         try {
-            String userRole = JWT.decode(token).getAudience().get(0);
-            String userId = userRole.split("-")[0];
-            String role = userRole.split("-")[1];
-            Account account = null;
-            if (RoleEnum.ADMIN.name().equals(role)) {
-                account = staticAdminService.selectById(Integer.valueOf(userId));
-            } else if (RoleEnum.DEV.name().equals(role)) {
-                account = staticDevService.selectById(Integer.valueOf(userId));
-            } else if (RoleEnum.OPS.name().equals(role)) {
-                account = staticOpsService.selectById(Integer.valueOf(userId));
-            }
+            Account account = loadAccount(token);
             if (account == null) {
                 return null;
             }
@@ -119,6 +98,23 @@ public class TokenUtils {
     }
 
     /**
+     * 按 token 载荷里的 id 和角色回查人员表。角色不一致或账号已禁用则视为无效。
+     */
+    private static Account loadAccount(String token) {
+        String userRole = JWT.decode(token).getAudience().get(0);
+        String userId = userRole.split("-")[0];
+        String role = userRole.split("-")[1];
+        Person person = staticPersonService.selectById(Integer.valueOf(userId));
+        if (person == null || !role.equals(person.getRole())) {
+            return null;
+        }
+        if (AccountStatusEnum.DISABLED.name().equals(person.getStatus())) {
+            return null;
+        }
+        return person;
+    }
+
+    /**
      * 获取当前登录的用户信息
      */
     public static Account getCurrentUser() {
@@ -130,15 +126,9 @@ public class TokenUtils {
             HttpServletRequest request = ((ServletRequestAttributes) RequestContextHolder.getRequestAttributes()).getRequest();
             String token = request.getHeader(Constants.TOKEN);
             if (ObjectUtil.isNotEmpty(token)) {
-                String userRole = JWT.decode(token).getAudience().get(0);
-                String userId = userRole.split("-")[0];  // 获取用户id
-                String role = userRole.split("-")[1];    // 获取角色
-                if (RoleEnum.ADMIN.name().equals(role)) {
-                    return staticAdminService.selectById(Integer.valueOf(userId));
-                } else if (RoleEnum.DEV.name().equals(role)) {
-                    return staticDevService.selectById(Integer.valueOf(userId));
-                } else if (RoleEnum.OPS.name().equals(role)) {
-                    return staticOpsService.selectById(Integer.valueOf(userId));
+                Account account = loadAccount(token);
+                if (account != null) {
+                    return account;
                 }
             }
         } catch (Exception e) {

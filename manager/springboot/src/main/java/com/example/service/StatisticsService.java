@@ -84,7 +84,7 @@ public class StatisticsService {
      */
     public List<Map<String, Object>> deployStatus() {
         return fillStatus(statisticsMapper.countDeployGroupByStatus(),
-                new String[]{"PENDING", "APPROVED", "DEPLOYING", "SUCCESS", "FAILED", "REJECTED"});
+                new String[]{"REVIEW", "TESTING", "ACCEPTING", "PENDING", "APPROVED", "DEPLOYING", "SUCCESS", "FAILED", "REJECTED"});
     }
 
     /**

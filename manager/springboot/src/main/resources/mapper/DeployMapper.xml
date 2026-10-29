@@ -11,7 +11,7 @@
 
     <!-- 联查字段：应用名、应用编号、服务器主机名 -->
     <sql id="Join_Column_List">
-        a.name as app_name, a.code as app_code, s.hostname as server_name
+        a.name as app_name, a.code as app_code, s.hostname as server_name, s.env as server_env
     </sql>
 
     <sql id="Join_Table">
@@ -24,16 +24,8 @@
         select
         <include refid="Base_Column_List" />,
         <include refid="Join_Column_List" />,
-        coalesce(
-            (select 'ADMIN' from admin x where x.username = d.applicant or x.name = d.applicant limit 1),
-            (select 'DEV' from dev x where x.deleted = 0 and (x.username = d.applicant or x.name = d.applicant) limit 1),
-            (select 'OPS' from ops x where x.deleted = 0 and (x.username = d.applicant or x.name = d.applicant) limit 1)
-        ) as applicant_role,
-        coalesce(
-            (select 'ADMIN' from admin x where x.username = d.approver or x.name = d.approver limit 1),
-            (select 'DEV' from dev x where x.deleted = 0 and (x.username = d.approver or x.name = d.approver) limit 1),
-            (select 'OPS' from ops x where x.deleted = 0 and (x.username = d.approver or x.name = d.approver) limit 1)
-        ) as approver_role
+        (select x.role from person x where x.deleted = 0 and (x.username = d.applicant or x.name = d.applicant) limit 1) as applicant_role,
+        (select x.role from person x where x.deleted = 0 and (x.username = d.approver or x.name = d.approver) limit 1) as approver_role
         <include refid="Join_Table" />
         <where>
             d.deleted = 0
@@ -44,6 +36,14 @@
             <if test="serverId != null"> and d.server_id= #{serverId}</if>
             <if test="deployType != null"> and d.deploy_type= #{deployType}</if>
             <if test="applicant != null"> and d.applicant like concat('%', #{applicant}, '%')</if>
+            <if test="scopeApplicant != null and scopeApplicant != ''"> and d.applicant = #{scopeApplicant}</if>
+            <if test="scopeEnv != null and scopeEnv != ''"> and s.env = #{scopeEnv}</if>
+            <if test="scopeStatuses != null and scopeStatuses.size() > 0">
+                and d.status in
+                <foreach collection="scopeStatuses" item="scopeStatus" open="(" separator="," close=")">
+                    #{scopeStatus}
+                </foreach>
+            </if>
             <if test="approver != null"> and d.approver like concat('%', #{approver}, '%')</if>
             <if test="startTime != null"> and d.apply_time &gt;= #{startTime}</if>
             <if test="endTime != null"> and d.apply_time &lt;= #{endTime}</if>

@@ -11,13 +11,11 @@ import com.example.common.enums.RoleEnum;
 import com.example.entity.Account;
 import com.example.entity.App;
 import com.example.entity.Deploy;
-import com.example.entity.DeployArtifact;
 import com.example.entity.DeployExecution;
 import com.example.entity.DeployLog;
 import com.example.entity.Server;
 import com.example.exception.BusinessException;
 import com.example.mapper.AppMapper;
-import com.example.mapper.DeployArtifactMapper;
 import com.example.mapper.DeployMapper;
 import com.example.mapper.ServerMapper;
 import com.example.utils.AuthUtils;
@@ -37,7 +35,7 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
 /**
- * 请求线程里只改状态。SSH、上传和写执行日志都在事务提交之后的线程池里做。
+ * 请求线程里只改状态。SSH 拉仓库和写执行日志都在事务提交之后的线程池里做。
  */
 @Service
 public class DeployExecutionService {
@@ -58,9 +56,6 @@ public class DeployExecutionService {
 
     @Resource
     private ServerMapper serverMapper;
-
-    @Resource
-    private DeployArtifactMapper deployArtifactMapper;
 
     @Resource
     private DeployExecutor sshDeployExecutor;
@@ -149,30 +144,16 @@ public class DeployExecutionService {
             String version = rollback && StrUtil.isNotBlank(deploy.getRollbackVersion())
                     ? deploy.getRollbackVersion() : deploy.getVersion();
             String appKey = StrUtil.isNotBlank(app.getCode()) ? app.getCode() : app.getName();
-            DeployArtifact artifact = deployArtifactMapper.selectLatest(app.getId(), version);
-            String packageFile = "";
-            if (!rollback && artifact != null && StrUtil.isNotBlank(artifact.getFilePath())) {
-                packageFile = fileName(artifact.getFilePath());
-            }
-            String script = rollback
-                    ? DeployScripts.rollback(version, server.getDeployPath())
-                    : DeployScripts.deploy(appKey, version, server.getDeployPath(), packageFile);
-            if (!rollback) {
-                if (artifact == null || StrUtil.isBlank(artifact.getFilePath())) {
-                    fail(execution, buffer, operator, null, "缺少制品：请先在部署申请里上传该版本的包", false);
+            String script;
+            if (rollback) {
+                script = DeployScripts.rollback(version, server.getDeployPath());
+            } else {
+                if (StrUtil.isBlank(app.getRepoUrl())) {
+                    fail(execution, buffer, operator, null, "应用未配置代码仓库地址，无法生成拉取脚本", false);
                     return;
                 }
-                packageFile = fileName(artifact.getFilePath());
-                String remoteDir = server.getDeployPath() + "/packages";
-                sshDeployExecutor.runCommand(server, "mkdir -p " + remoteDir);
-                sshDeployExecutor.upload(server, artifact.getFilePath(), remoteDir);
-                String remoteFile = remoteDir + "/" + packageFile;
-                String remoteMd5 = sshDeployExecutor.remoteMd5(server, remoteFile);
-                if (artifact.getMd5() != null && !artifact.getMd5().equalsIgnoreCase(remoteMd5)) {
-                    fail(execution, buffer, operator, null, "制品 MD5 不一致，本地 " + artifact.getMd5() + "，远端 " + remoteMd5, true);
-                    return;
-                }
-                buffer.add("制品已上传并通过 MD5 校验");
+                script = DeployScripts.deploy(appKey, version, server.getDeployPath(), app.getRepoUrl().trim());
+                buffer.add("已生成仓库拉取脚本，按版本 " + version + " 获取代码");
             }
             int exit = sshDeployExecutor.runScript(server, script, buffer::add);
             buffer.flush();
@@ -248,11 +229,6 @@ public class DeployExecutionService {
         } catch (Exception e) {
             log.warn("回写部署失败状态未成功 deployId={}", execution.getDeployId());
         }
-    }
-
-    private String fileName(String path) {
-        int slash = Math.max(path.lastIndexOf('/'), path.lastIndexOf('\\'));
-        return slash >= 0 ? path.substring(slash + 1) : path;
     }
 
     private String cut(String text, int max) {

@@ -155,7 +155,11 @@
           <el-input v-model="form.techStack" placeholder="技术栈"></el-input>
         </el-form-item>
         <el-form-item label="代码仓库地址" prop="repoUrl">
-          <el-input v-model="form.repoUrl" placeholder="代码仓库地址"></el-input>
+          <el-input v-model="form.repoUrl" placeholder="https:// 或 git@ 开头的仓库地址"></el-input>
+        </el-form-item>
+        <el-form-item label="拉取脚本">
+          <el-button size="small" icon="el-icon-document" @click="buildRepoScript">生成获取仓库代码脚本</el-button>
+          <el-input v-if="repoScript" type="textarea" :rows="8" readonly :value="repoScript" style="margin-top: 8px"></el-input>
         </el-form-item>
         <el-form-item label="状态" prop="status">
           <el-select v-model="form.status" placeholder="请选择状态" style="width: 100%">
@@ -188,6 +192,7 @@ export default {
       fromVisible: false,
       formReadonly: false,
       form: {},
+      repoScript: '',
       projectList: [],   // 项目下拉数据源
       serverList: [],    // 服务器下拉数据源
       statusOptions: [
@@ -284,18 +289,42 @@ export default {
     },
     handleAdd() {   // 新增数据
       this.formReadonly = false
-      this.form = { status: 'OFFLINE' }  // 新增数据的时候清空数据
-      this.fromVisible = true   // 打开弹窗
+      this.form = { status: 'OFFLINE' }
+      this.repoScript = ''
+      this.fromVisible = true
     },
-    handleEdit(row) {   // 编辑数据
+    handleEdit(row) {
       this.formReadonly = false
-      this.form = JSON.parse(JSON.stringify(row))  // 给form对象赋值  注意要深拷贝数据
-      this.fromVisible = true   // 打开弹窗
+      this.form = JSON.parse(JSON.stringify(row))
+      this.repoScript = ''
+      this.fromVisible = true
     },
-    handleView(row) {   // 在线/部署中：只读查看
+    handleView(row) {
       this.formReadonly = true
       this.form = JSON.parse(JSON.stringify(row))
+      this.repoScript = ''
       this.fromVisible = true
+    },
+    buildRepoScript() {
+      const appKey = this.form.code || this.form.name
+      if (!this.form.repoUrl || !this.form.version || !this.form.serverId || !appKey) {
+        this.$message.warning('请先填写应用编号、版本、代码仓库并选择部署环境')
+        return
+      }
+      this.$request.post('/app/repoScript', {
+        name: this.form.name,
+        code: this.form.code,
+        version: this.form.version,
+        repoUrl: this.form.repoUrl,
+        serverId: this.form.serverId
+      }).then(res => {
+        if (res.code === '200') {
+          this.repoScript = res.data || ''
+        } else {
+          this.repoScript = ''
+          this.$message.error(res.msg)
+        }
+      })
     },
     save() {   // 保存按钮触发的逻辑  它会触发新增或者更新
       this.$refs.formRef.validate((valid) => {

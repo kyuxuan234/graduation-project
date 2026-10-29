@@ -18,6 +18,11 @@ public class AppController {
     @Resource
     private AppService appService;
 
+    @PostMapping("/repoScript")
+    public Result<String> repoScript(@RequestBody App app) {
+        return Result.success(appService.repoScript(app));
+    }
+
     /**
      * 新增
      */

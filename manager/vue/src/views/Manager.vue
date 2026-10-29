@@ -36,7 +36,7 @@
             <div>{{ user.name || user.username }}（{{ roleName }}）</div>
           </div>
           <el-dropdown-menu slot="dropdown">
-            <el-dropdown-item v-if="user.role === 'ADMIN'" icon="el-icon-user" @click.native="$router.push('/adminPerson')">个人信息</el-dropdown-item>
+            <el-dropdown-item icon="el-icon-user" @click.native="$router.push('/adminPerson')">个人信息</el-dropdown-item>
             <el-dropdown-item icon="el-icon-key" @click.native="$router.push('/password')">修改密码</el-dropdown-item>
             <el-dropdown-item icon="el-icon-switch-button" @click.native="logout">退出登录</el-dropdown-item>
           </el-dropdown-menu>
@@ -48,7 +48,7 @@
     <div class="manager-main">
       <!--  侧边栏，按当前登录角色过滤菜单  -->
       <div class="manager-main-left">
-        <el-menu :default-openeds="['ops', 'user']" router style="border: none" :default-active="$route.path">
+        <el-menu :default-openeds="['asset', 'release', 'user']" router style="border: none" :default-active="$route.path">
           <template v-for="menu in menus">
             <!--  一级菜单  -->
             <el-menu-item v-if="!menu.children" :key="menu.index" :index="menu.index">
@@ -90,26 +90,32 @@ import { rememberPerson, rememberPersons } from '@/utils/person'
 import { buildInbox } from '@/utils/inbox'
 import { defaultAvatar, resolveAvatar } from '@/utils/avatar'
 
+const FLOW = ['ADMIN', 'DEV', 'TL', 'QA', 'PM', 'OPS']
+
 // 全部菜单，roles 表示哪些角色可见
 const ALL_MENUS = [
-  { index: '/dashboard', name: '工作台', icon: 'el-icon-s-home', roles: ['ADMIN', 'DEV', 'OPS'] },
+  { index: '/dashboard', name: '发布看板', icon: 'el-icon-s-home', roles: FLOW },
   {
-    index: 'ops', name: '发布管理', icon: 'el-icon-s-operation',
+    index: 'asset', name: '项目资产', icon: 'el-icon-folder-opened',
     children: [
-      { index: '/project', name: '项目', icon: 'el-icon-folder', roles: ['ADMIN', 'DEV'] },
-      { index: '/server', name: '服务器', icon: 'el-icon-monitor', roles: ['ADMIN', 'OPS'] },
-      { index: '/app', name: '应用', icon: 'el-icon-s-platform', roles: ['ADMIN', 'DEV', 'OPS'] },
-      { index: '/deploy', name: '部署单', icon: 'el-icon-s-promotion', roles: ['ADMIN', 'DEV', 'OPS'] },
-      { index: '/alarm', name: '告警', icon: 'el-icon-warning-outline', roles: ['ADMIN', 'DEV', 'OPS'] },
-      { index: '/analysis', name: '发布分析', icon: 'el-icon-data-line', roles: ['ADMIN', 'DEV', 'OPS'] },
+      { index: '/project', name: '业务项目', icon: 'el-icon-folder', roles: ['ADMIN', 'DEV'] },
+      { index: '/app', name: '应用服务', icon: 'el-icon-s-platform', roles: ['ADMIN', 'DEV', 'OPS'] },
+      { index: '/server', name: '部署环境', icon: 'el-icon-monitor', roles: ['ADMIN', 'OPS'] },
     ]
   },
   {
-    index: 'user', name: '系统设置', icon: 'el-icon-user-solid',
+    index: 'release', name: '发布管控', icon: 'el-icon-s-promotion',
     children: [
-      { index: '/dev', name: '开发人员', icon: 'el-icon-user', roles: ['ADMIN'] },
-      { index: '/ops', name: '运维人员', icon: 'el-icon-s-custom', roles: ['ADMIN'] },
-      { index: '/notice', name: '系统公告', icon: 'el-icon-bell', roles: ['ADMIN'] },
+      { index: '/deploy', name: '发布单', icon: 'el-icon-s-order', roles: FLOW },
+      { index: '/alarm', name: '发布告警', icon: 'el-icon-warning-outline', roles: ['ADMIN', 'OPS'] },
+      { index: '/analysis', name: '发布报表', icon: 'el-icon-data-line', roles: ['ADMIN', 'OPS'] },
+    ]
+  },
+  {
+    index: 'user', name: '团队设置', icon: 'el-icon-user-solid',
+    children: [
+      { index: '/person', name: '团队成员', icon: 'el-icon-user', roles: ['ADMIN'] },
+      { index: '/notice', name: '发布通知', icon: 'el-icon-bell', roles: ['ADMIN'] },
     ]
   },
 ]
@@ -121,15 +127,14 @@ const PAGE_ICONS = {
   '/deploy': 'el-icon-s-promotion',
   '/alarm': 'el-icon-warning-outline',
   '/analysis': 'el-icon-data-line',
-  '/dev': 'el-icon-user',
-  '/ops': 'el-icon-s-custom',
+  '/person': 'el-icon-user',
   '/adminPerson': 'el-icon-user',
   '/password': 'el-icon-key',
   '/admin': 'el-icon-s-custom',
   '/notice': 'el-icon-bell',
 }
 
-const ROLE_NAMES = { ADMIN: '超级管理员', DEV: '开发人员', OPS: '运维人员' }
+const ROLE_NAMES = { ADMIN: '超级管理员', DEV: '开发人员', TL: '技术负责人', QA: '测试', PM: '产品经理', OPS: '运维人员' }
 
 export default {
   name: "Manager",
@@ -174,8 +179,7 @@ export default {
     }
     rememberPerson(this.user.username, this.user.name)
     if (this.user.role === 'ADMIN') {
-      this.$request.get('/dev/selectAll').then(res => rememberPersons(res.data))
-      this.$request.get('/ops/selectAll').then(res => rememberPersons(res.data))
+      this.$request.get('/person/selectAll').then(res => rememberPersons(res.data))
     }
     this.loadInbox(true)
   },

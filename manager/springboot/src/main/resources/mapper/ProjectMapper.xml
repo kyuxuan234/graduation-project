@@ -12,11 +12,7 @@
         select
         <include refid="Base_Column_List" />,
         (select count(*) from app a where a.project_id = project.id and a.deleted = 0) as app_count,
-        coalesce(
-            (select 'ADMIN' from admin x where x.username = project.leader or x.name = project.leader limit 1),
-            (select 'DEV' from dev x where x.deleted = 0 and (x.username = project.leader or x.name = project.leader) limit 1),
-            (select 'OPS' from ops x where x.deleted = 0 and (x.username = project.leader or x.name = project.leader) limit 1)
-        ) as leader_role
+        (select x.role from person x where x.deleted = 0 and (x.username = project.leader or x.name = project.leader) limit 1) as leader_role
         from project
         <where>
             deleted = 0

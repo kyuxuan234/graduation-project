@@ -24,11 +24,7 @@
         select
         <include refid="Base_Column_List" />,
         <include refid="Join_Column_List" />,
-        coalesce(
-            (select 'ADMIN' from admin x where x.username = al.handler or x.name = al.handler limit 1),
-            (select 'DEV' from dev x where x.deleted = 0 and (x.username = al.handler or x.name = al.handler) limit 1),
-            (select 'OPS' from ops x where x.deleted = 0 and (x.username = al.handler or x.name = al.handler) limit 1)
-        ) as handler_role
+        (select x.role from person x where x.deleted = 0 and (x.username = al.handler or x.name = al.handler) limit 1) as handler_role
         <include refid="Join_Table" />
         <where>
             al.deleted = 0

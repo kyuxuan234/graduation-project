@@ -6,15 +6,15 @@
 --   2. 每张表统一包含 id / create_time / update_time / deleted 四个公共字段
 --   3. 状态类字段统一 VARCHAR(20)，取值为英文枚举，前后端保持一致
 --   4. 以 app 为枢纽建 7 条物理外键，把 project / server / app / deploy / deploy_log / alarm 串成闭环
---   5. admin / notice 是账号与公告表，不在上述业务闭环内，无业务外键
+--   5. person / notice 是账号与公告表，不在上述业务闭环内，无业务外键
 -- ============================================================
 
 SET NAMES utf8mb4;
 
 -- ----------------------------
--- 0. 超级管理员（独立账号表，不在项目→服务器→应用→部署→告警闭环内）
+-- 0. 人员（管理员 / 开发 / 运维同一张表，用 role 区分）
 -- ----------------------------
-CREATE TABLE IF NOT EXISTS `admin` (
+CREATE TABLE IF NOT EXISTS `person` (
   `id` INT NOT NULL AUTO_INCREMENT COMMENT 'ID',
   `username` VARCHAR(50) NOT NULL COMMENT '用户名',
   `password` VARCHAR(100) NULL DEFAULT NULL COMMENT '密码：新密码 BCrypt，兼容历史 32 位 MD5(明文 + 盐值)',
@@ -22,50 +22,15 @@ CREATE TABLE IF NOT EXISTS `admin` (
   `phone` VARCHAR(20) NULL DEFAULT NULL COMMENT '手机号',
   `email` VARCHAR(100) NULL DEFAULT NULL COMMENT '邮箱',
   `avatar` VARCHAR(255) NULL DEFAULT NULL COMMENT '头像',
-  `role` VARCHAR(20) NULL DEFAULT 'ADMIN' COMMENT '角色：ADMIN',
+  `role` VARCHAR(20) NOT NULL COMMENT '角色：ADMIN-超级管理员 DEV-开发 TL-技术负责人 QA-测试 PM-产品经理 OPS-运维',
   `status` VARCHAR(20) NULL DEFAULT 'ACTIVE' COMMENT '状态：ACTIVE-正常 DISABLED-禁用',
   `create_time` DATETIME NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
   `update_time` DATETIME NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
   `deleted` TINYINT NULL DEFAULT 0 COMMENT '逻辑删除：0-未删除 1-已删除',
   PRIMARY KEY (`id`) USING BTREE,
-  UNIQUE INDEX `uk_admin_username`(`username`) USING BTREE
-) ENGINE = InnoDB CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '超级管理员' ROW_FORMAT = DYNAMIC;
-
--- ----------------------------
--- 1. 开发人员
--- ----------------------------
-CREATE TABLE IF NOT EXISTS `dev` (
-  `id` INT NOT NULL AUTO_INCREMENT COMMENT 'ID',
-  `username` VARCHAR(50) NOT NULL COMMENT '用户名',
-  `password` VARCHAR(100) NULL DEFAULT NULL COMMENT '密码',
-  `name` VARCHAR(50) NULL DEFAULT NULL COMMENT '姓名',
-  `phone` VARCHAR(20) NULL DEFAULT NULL COMMENT '手机号',
-  `email` VARCHAR(100) NULL DEFAULT NULL COMMENT '邮箱',
-  `status` VARCHAR(20) NULL DEFAULT 'ACTIVE' COMMENT '状态：ACTIVE-正常 DISABLED-禁用',
-  `create_time` DATETIME NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-  `update_time` DATETIME NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
-  `deleted` TINYINT NULL DEFAULT 0 COMMENT '逻辑删除：0-未删除 1-已删除',
-  PRIMARY KEY (`id`) USING BTREE,
-  UNIQUE INDEX `uk_dev_username`(`username`) USING BTREE
-) ENGINE = InnoDB CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '开发人员' ROW_FORMAT = DYNAMIC;
-
--- ----------------------------
--- 2. 运维人员
--- ----------------------------
-CREATE TABLE IF NOT EXISTS `ops` (
-  `id` INT NOT NULL AUTO_INCREMENT COMMENT 'ID',
-  `username` VARCHAR(50) NOT NULL COMMENT '用户名',
-  `password` VARCHAR(100) NULL DEFAULT NULL COMMENT '密码',
-  `name` VARCHAR(50) NULL DEFAULT NULL COMMENT '姓名',
-  `phone` VARCHAR(20) NULL DEFAULT NULL COMMENT '手机号',
-  `email` VARCHAR(100) NULL DEFAULT NULL COMMENT '邮箱',
-  `status` VARCHAR(20) NULL DEFAULT 'ACTIVE' COMMENT '状态：ACTIVE-正常 DISABLED-禁用',
-  `create_time` DATETIME NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-  `update_time` DATETIME NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
-  `deleted` TINYINT NULL DEFAULT 0 COMMENT '逻辑删除：0-未删除 1-已删除',
-  PRIMARY KEY (`id`) USING BTREE,
-  UNIQUE INDEX `uk_ops_username`(`username`) USING BTREE
-) ENGINE = InnoDB CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '运维人员' ROW_FORMAT = DYNAMIC;
+  UNIQUE INDEX `uk_person_username`(`username`) USING BTREE,
+  INDEX `idx_person_role`(`role`) USING BTREE
+) ENGINE = InnoDB CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '人员' ROW_FORMAT = DYNAMIC;
 
 -- ----------------------------
 -- 2.1 系统公告（脚手架公告页仍使用 time / user 字段）
@@ -170,7 +135,7 @@ CREATE TABLE IF NOT EXISTS `deploy` (
   `version` VARCHAR(50) NULL DEFAULT NULL COMMENT '目标版本',
   `deploy_type` VARCHAR(20) NULL DEFAULT NULL COMMENT '类型：FULL-全量 INCREMENT-增量 ROLLBACK-回滚',
   `execute_mode` VARCHAR(16) NOT NULL DEFAULT 'AUTO' COMMENT '执行方式：AUTO-自动SSH MANUAL-人工确认',
-  `status` VARCHAR(20) NULL DEFAULT 'PENDING' COMMENT '状态：PENDING-待审批 APPROVED-已批准 REJECTED-已驳回 DEPLOYING-部署中 SUCCESS-成功 FAILED-失败',
+  `status` VARCHAR(20) NULL DEFAULT 'PENDING' COMMENT '状态：REVIEW-待技术审查 TESTING-待测试验收 ACCEPTING-待产品验收 PENDING-待运维审批 APPROVED-已批准 REJECTED-已驳回 DEPLOYING-部署中 SUCCESS-成功 FAILED-失败',
   `applicant` VARCHAR(50) NULL DEFAULT NULL COMMENT '申请人',
   `approver` VARCHAR(50) NULL DEFAULT NULL COMMENT '审批人',
   `apply_time` DATETIME NULL DEFAULT NULL COMMENT '申请时间',

@@ -2,11 +2,16 @@ package com.example.common;
 
 import com.example.common.enums.DeployStatusEnum;
 import com.example.common.enums.ResultCodeEnum;
+import com.example.common.enums.ServerEnvEnum;
 import com.example.exception.BusinessException;
 
 /**
  * 部署单状态机：只校验允许的流转，不碰数据库。
- * PENDING → APPROVED / REJECTED
+ * REVIEW → TESTING / REJECTED（生产环境，技术负责人审查）
+ * TESTING → PENDING / REJECTED（测试环境，测试验收后交运维）
+ * TESTING → ACCEPTING / REJECTED（生产环境，测试验收）
+ * ACCEPTING → PENDING / REJECTED（生产环境，产品验收）
+ * PENDING → APPROVED / REJECTED（运维审批；开发环境提交后直接进入）
  * APPROVED → DEPLOYING
  * DEPLOYING → SUCCESS / FAILED
  * SUCCESS → DEPLOYING（回滚后再走完成）
@@ -40,6 +45,31 @@ public final class DeployStatusMachine {
 
     public static void assertRollback(String currentStatus) {
         assertCurrent(currentStatus, DeployStatusEnum.SUCCESS);
+    }
+
+    /**
+     * 审查或验收通过后的下一状态。测试环境的测试验收通过后直接交给运维。
+     */
+    public static String passTarget(String currentStatus, String env) {
+        if (DeployStatusEnum.REVIEW.name().equals(currentStatus)) {
+            return DeployStatusEnum.TESTING.name();
+        }
+        if (DeployStatusEnum.TESTING.name().equals(currentStatus)) {
+            if (ServerEnvEnum.TEST.name().equals(env)) {
+                return DeployStatusEnum.PENDING.name();
+            }
+            return DeployStatusEnum.ACCEPTING.name();
+        }
+        if (DeployStatusEnum.ACCEPTING.name().equals(currentStatus)) {
+            return DeployStatusEnum.PENDING.name();
+        }
+        throw new BusinessException(ResultCodeEnum.DEPLOY_STATUS_ERROR);
+    }
+
+    public static boolean isReviewGate(String currentStatus) {
+        return DeployStatusEnum.REVIEW.name().equals(currentStatus)
+                || DeployStatusEnum.TESTING.name().equals(currentStatus)
+                || DeployStatusEnum.ACCEPTING.name().equals(currentStatus);
     }
 
     private static void assertCurrent(String currentStatus, DeployStatusEnum expect) {

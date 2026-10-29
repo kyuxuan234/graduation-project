@@ -47,7 +47,7 @@ MyBatis Mapper  ↔  MySQL manager
 
 - 前端直连 `http://localhost:9090`（`.env.development`），不做 webpack 代理；后端 `CorsFilter` 放行跨域。
 - JWT 放在请求头 `token`，签名密钥为配置项 `jwt.secret`（本地见 `application-dev.yml`，生产见环境变量 `JWT_SECRET`），有效期 2 小时。
-- 登录按 `admin` → `dev` → `ops` 三张账号表解析角色；**新密码用 BCrypt 存储**，库里历史遗留的 32 位 `MD5(明文 + devops_salt_2026)` 密文仍可登录（兼容读，见 `utils/PasswordUtils.java`）。
+- 登录按用户名查 `person` 表，角色存在该行的 `role` 字段（`ADMIN` / `DEV` / `OPS`）；**新密码用 BCrypt 存储**，库里历史遗留的 32 位 `MD5(明文 + devops_salt_2026)` 密文仍可登录（兼容读，见 `utils/PasswordUtils.java`）。
 
 ### 资产闭环（以应用为枢纽）
 
@@ -62,17 +62,20 @@ project ──► app ◄── server
 
 ### 角色与菜单
 
-| 角色 | 账号表 | 能做什么 |
+| 角色 | 账号 | 能做什么 |
 |---|---|---|
-| ADMIN | `admin` | 全量菜单；绕过 `AuthUtils.requireRole`；管开发/运维/公告 |
-| DEV | `dev` | 发起部署申请；只能改自己的待审批单；可见项目 / 应用 / 部署 / 告警 / 分析 |
-| OPS | `ops` | 管服务器与 SSH 凭据；审批、开始/结束部署、回滚；接手并闭环告警 |
+| ADMIN | `person.role = ADMIN` | 全量菜单；绕过角色校验；管团队成员与发布通知 |
+| DEV | `person.role = DEV` | 发起发布单；技术审查前只能改自己的单 |
+| TL | `person.role = TL` | 审查发布变更，通过后进入测试验收 |
+| QA | `person.role = QA` | 对审查通过的发布单做测试验收 |
+| PM | `person.role = PM` | 对测试通过的发布单做业务验收，通过后交给运维 |
+| OPS | `person.role = OPS` | 审批已验收的发布单；执行、回滚；接手并闭环告警 |
 
-侧边栏：仪表盘 / 应用 / 部署 / 告警 / 运维分析全员可见；**服务器仅 ADMIN+OPS**；项目 ADMIN+DEV；人员与公告仅 ADMIN。路由 `meta.roles` 与接口层再各卡一次。接口层的角色校验由 `AuthUtils.requireRole` 把关，其中 **ADMIN 会被无条件放行（旁路角色校验）**，便于演示与排障（前端登录与 WebSocket 握手同样接受 ADMIN）。
+侧边栏：仪表盘 / 应用 / 部署 / 告警 / 运维分析全员可见；**服务器仅 ADMIN+OPS**；项目 ADMIN+DEV；人员管理与公告仅 ADMIN。人员账号在同一张 `person` 表，页面按角色筛选。路由 `meta.roles` 与接口层再各卡一次。接口层的角色校验由 `AuthUtils.requireRole` 把关，其中 **ADMIN 会被无条件放行（旁路角色校验）**，便于演示与排障（前端登录与 WebSocket 握手同样接受 ADMIN）。
 
 ### 主要页面
 
-`/dashboard` · `/project` · `/server` · `/app` · `/deploy` · `/alarm` · `/analysis` · `/dev` `/ops` `/notice` · `/login` `/register`
+`/dashboard` · `/project` · `/server` · `/app` · `/deploy` · `/alarm` · `/analysis` · `/person` `/notice` · `/login` `/register`
 
 ---
 
@@ -121,7 +124,7 @@ SUCCESS ──回滚──► DEPLOYING（类型改为 ROLLBACK）──完成�
 | `AUTO` | 事务提交后异步 SSH 到目标机跑脚本，按退出码判成功/失败 |
 | `MANUAL` | 只进入「部署中」；页面可开 WebSocket 终端，运维自行操作后点成功/失败 |
 
-服务器保存时：用登记的 SSH 密码登录一次，在目标机写入公钥、本地密文保存私钥，之后探活与自动部署都走密钥（`ssh_auth_type=KEY`）。生产凭据用 `CREDENTIAL_KEY` 加密入库。内网 Docker 一键起见 `manager/DEPLOY.md`。
+服务器保存时：用登记的 SSH 密码登录一次，在目标机写入公钥、本地密文保存私钥，之后探活与自动部署都走密钥（`ssh_auth_type=KEY`）。生产凭据用 `CREDENTIAL_KEY` 加密入库。
 
 ---
 
@@ -164,14 +167,15 @@ npm run serve
 
 MySQL 没开时，登录会报 JDBC `Communications link failure`。Windows 可先 `net start MySQL`（通常要管理员权限）。
 
-要用 Docker 起全栈（含 MySQL），看 `manager/DEPLOY.md`，不要和本机 MySQL 抢 3306。
-
 ### 演示账号
 
 | 角色 | 用户名 | 密码 |
 |---|---|---|
 | 超级管理员 | `admin` | `admin` |
 | 开发 | `dev1` | `123456` |
+| 技术负责人 | `tl1` | `123456` |
+| 测试 | `qa1` | `123456` |
+| 产品经理 | `pm1` | `123456` |
 | 运维 | `ops1` | `123456` |
 
 登录页可直接点角色预填。开发/运维也可走 `/register` 注册（不能注册 ADMIN）。
@@ -179,7 +183,7 @@ MySQL 没开时，登录会报 JDBC `Communications link failure`。Windows 可�
 ### 推荐演示路径
 
 1. **OPS**（或 ADMIN）→ 服务器管理：填好 SSH 用户/端口/登记密码/部署目录并保存，确认认证方式变为密钥。
-2. **DEV** → 部署管理 → 发起申请（选应用、目标版本）；制品需先上传（自动部署依赖制品）。
+2. **DEV** → 部署管理 → 发起申请（选应用、目标版本）。应用需先填写代码仓库；自动部署会生成并执行拉取该版本代码的脚本。
 3. **OPS** → 审批通过 → 开始部署，选「自动部署」：应用变为「部署中」，SSH 跑完后自动成功/失败并反写版本。
 4. 也可选「手动部署」：打开终端操作后，再点成功/失败。
 5. 成功单可回滚（自动模式同样走 SSH）。告警：接手 → 解决；运维分析页看统计。

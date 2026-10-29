@@ -1,17 +1,21 @@
 <template>
   <div>
-    <div class="relation-bar" v-if="params.id || params.appId || params.serverId || params.status || finished">
-      <i class="el-icon-link"></i>
-      <span>{{ deployHint }}</span>
-      <span class="link-text" style="margin-left: 12px" @click="reset">查看全部</span>
+    <div class="relation-bar" v-if="scopeHint || params.id || params.appId || params.serverId || params.status || finished">
+      <i class="el-icon-view"></i>
+      <span>{{ scopeHint }}</span>
+      <template v-if="params.id || params.appId || params.serverId || params.status || finished">
+        <i class="el-icon-link" style="margin-left: 12px"></i>
+        <span>{{ deployHint }}</span>
+        <span class="link-text" style="margin-left: 12px" @click="reset">{{ user.role === 'ADMIN' ? '查看全部' : '清除筛选' }}</span>
+      </template>
     </div>
     <div class="toolbar">
       <div class="search-fields">
         <el-input prefix-icon="el-icon-tickets" placeholder="请输入部署单号查询" style="width: 200px" v-model="params.deployNo" clearable></el-input>
-        <el-select placeholder="请选择状态" style="width: 140px" v-model="params.status" clearable>
-          <el-option v-for="item in statusOptions" :key="item.value" :label="item.label" :value="item.value"></el-option>
+        <el-select v-if="visibleStatusOptions.length > 1" placeholder="请选择状态" style="width: 140px" v-model="params.status" clearable>
+          <el-option v-for="item in visibleStatusOptions" :key="item.value" :label="item.label" :value="item.value"></el-option>
         </el-select>
-        <el-input prefix-icon="el-icon-user" placeholder="请输入申请人查询" style="width: 160px" v-model="params.applicant" clearable></el-input>
+        <el-input v-if="user.role === 'ADMIN' || user.role === 'OPS'" prefix-icon="el-icon-user" placeholder="请输入申请人查询" style="width: 160px" v-model="params.applicant" clearable></el-input>
         <el-date-picker v-model="dateRange" type="daterange" style="width: 250px"
                         range-separator="至" start-placeholder="申请开始日期" end-placeholder="申请结束日期"
                         value-format="yyyy-MM-dd"></el-date-picker>
@@ -53,13 +57,10 @@
             <span class="cell-text"><i class="el-icon-price-tag"></i>{{ scope.row.version || '-' }}</span>
           </template>
         </el-table-column>
-        <el-table-column label="部署类型" width="110" align="center">
-          <template slot="header"><span class="th-label"><i class="el-icon-s-operation"></i>部署类型</span></template>
+        <el-table-column label="环境" width="100" align="center">
+          <template slot="header"><span class="th-label"><i class="el-icon-place"></i>环境</span></template>
           <template v-slot="scope">
-            <el-tag :type="scope.row.deployType === 'ROLLBACK' ? 'warning' : 'info'">
-              <i :class="scope.row.deployType === 'ROLLBACK' ? 'el-icon-refresh-left' : 'el-icon-upload2'"></i>
-              {{ typeNames[scope.row.deployType] || scope.row.deployType }}
-            </el-tag>
+            <el-tag size="mini" :type="envTag[scope.row.serverEnv] || 'info'">{{ envNames[scope.row.serverEnv] || '-' }}</el-tag>
           </template>
         </el-table-column>
         <el-table-column label="执行方式" width="110" align="center">
@@ -145,16 +146,12 @@
         <el-form-item label="目标版本" prop="version">
           <el-input v-model="form.version" placeholder="如 v1.0.1"></el-input>
         </el-form-item>
-        <el-form-item label="制品" v-if="!form.id">
-          <el-upload :action="uploadAction" :headers="uploadHeaders" :show-file-list="false" :on-success="onArtifactUploaded">
-            <el-button size="small" icon="el-icon-upload2">上传制品</el-button>
-          </el-upload>
-          <span v-if="artifactName" style="margin-left: 8px">{{ artifactName }}</span>
+        <el-form-item label="拉取脚本" v-if="!form.id">
+          <el-button size="small" icon="el-icon-document" @click="buildRepoScript">生成获取仓库代码脚本</el-button>
+          <el-input v-if="repoScript" type="textarea" :rows="8" readonly :value="repoScript" style="margin-top: 8px"></el-input>
         </el-form-item>
-        <el-form-item label="部署类型" prop="deployType">
-          <el-select v-model="form.deployType" placeholder="请选择部署类型" style="width: 100%">
-            <el-option v-for="item in typeOptions" :key="item.value" :label="item.label" :value="item.value"></el-option>
-          </el-select>
+        <el-form-item label="发布流程">
+          <span class="action-tip">{{ flowHint }}</span>
         </el-form-item>
         <el-form-item label="申请原因" prop="reason">
           <el-input type="textarea" :rows="4" v-model="form.reason" placeholder="申请原因"></el-input>
@@ -181,22 +178,23 @@
         <span>{{ actionRow.appName || '-' }} · {{ actionRow.serverName || '-' }} · {{ actionRow.version || '-' }}</span>
       </div>
 
-      <div v-if="actionScene === 'approve'">
+      <div v-if="actionScene === 'approve' || actionScene === 'review'">
         <el-form label-width="90px">
-          <el-form-item label="审批结果">
+          <el-form-item :label="actionScene === 'review' ? '处理结果' : '审批结果'">
             <el-radio-group v-model="approveForm.result">
-              <el-radio label="APPROVED">批准</el-radio>
+              <el-radio v-if="actionScene === 'approve'" label="APPROVED">批准</el-radio>
+              <el-radio v-else label="PASS">通过</el-radio>
               <el-radio label="REJECTED">驳回</el-radio>
             </el-radio-group>
           </el-form-item>
-          <el-form-item label="审批备注">
-            <el-input type="textarea" :rows="4" v-model="approveForm.remark" placeholder="审批备注"></el-input>
+          <el-form-item label="意见">
+            <el-input type="textarea" :rows="4" v-model="approveForm.remark" placeholder="填写审查或验收意见"></el-input>
           </el-form-item>
         </el-form>
       </div>
 
       <div v-else-if="actionScene === 'edit'">
-        <p class="action-tip">这是你提交的待审批申请，可以修改内容或删除。</p>
+        <p class="action-tip">这是你提交的发布单，技术负责人审查前可以修改或删除。</p>
       </div>
 
       <div v-else-if="actionScene === 'start'">
@@ -208,7 +206,7 @@
             </el-radio-group>
           </el-form-item>
         </el-form>
-        <p class="action-tip">自动：SSH 跑脚本（需已有制品）。手动：本窗打开终端，做完后点成功/失败。</p>
+        <p class="action-tip">自动：SSH 在目标机执行仓库拉取脚本。手动：本窗打开终端，做完后点成功/失败。</p>
       </div>
 
       <div v-else-if="actionScene === 'manual'">
@@ -231,9 +229,9 @@
       <div slot="footer" class="dialog-footer">
         <el-button icon="el-icon-document" @click="showLog(actionRow)">流转日志</el-button>
         <el-button v-if="canExecLog(actionRow)" icon="el-icon-tickets" @click="showExecLog(actionRow)">执行日志</el-button>
-        <template v-if="actionScene === 'approve'">
+        <template v-if="actionScene === 'approve' || actionScene === 'review'">
           <el-button v-if="canEditDeploy(actionRow)" icon="el-icon-edit" @click="editFromAction">修改申请</el-button>
-          <el-button type="primary" icon="el-icon-check" @click="submitApprove">提交审批</el-button>
+          <el-button type="primary" icon="el-icon-check" @click="submitApprove">{{ actionScene === 'review' ? '提交意见' : '提交审批' }}</el-button>
         </template>
         <template v-else-if="actionScene === 'edit'">
           <el-button type="primary" icon="el-icon-edit" @click="editFromAction">编辑</el-button>
@@ -284,7 +282,7 @@
 </template>
 
 <script>
-import { personName, personRoleName, roleTag, canDev, canOps, isAdmin } from '@/utils/person'
+import { personName, personRoleName, roleTag, canDev, canOps, canTl, canQa, canPm, isAdmin } from '@/utils/person'
 
 export default {
   name: "Deploy",
@@ -318,37 +316,38 @@ export default {
       execTimer: null,
       execRow: null,
       execCursor: 0,
-      artifactName: '',
-      artifactUrl: '',
+      repoScript: '',
       appList: [],      // 应用下拉数据源
       serverList: [],   // 服务器下拉数据源
       user: JSON.parse(localStorage.getItem('xm-user') || '{}'),
       statusOptions: [
-        { value: 'PENDING', label: '待审批' },
+        { value: 'REVIEW', label: '待技术审查' },
+        { value: 'TESTING', label: '待测试验收' },
+        { value: 'ACCEPTING', label: '待产品验收' },
+        { value: 'PENDING', label: '待运维审批' },
         { value: 'APPROVED', label: '已批准' },
         { value: 'REJECTED', label: '已驳回' },
         { value: 'DEPLOYING', label: '部署中' },
         { value: 'SUCCESS', label: '成功' },
         { value: 'FAILED', label: '失败' },
       ],
-      typeOptions: [
-        { value: 'FULL', label: '全量' },
-        { value: 'INCREMENT', label: '增量' },
-        { value: 'ROLLBACK', label: '回滚' },
-      ],
+      envNames: { DEV: '开发环境', TEST: '测试环境', PROD: '生产环境' },
+      envTag: { DEV: 'success', TEST: 'warning', PROD: 'danger' },
       statusNames: {
-        PENDING: '待审批', APPROVED: '已批准', REJECTED: '已驳回',
+        REVIEW: '待技术审查', TESTING: '待测试验收', ACCEPTING: '待产品验收',
+        PENDING: '待运维审批', APPROVED: '已批准', REJECTED: '已驳回',
         DEPLOYING: '部署中', SUCCESS: '成功', FAILED: '失败'
       },
       statusTag: {
+        REVIEW: 'warning', TESTING: 'warning', ACCEPTING: 'warning',
         PENDING: 'warning', APPROVED: 'primary', DEPLOYING: 'primary',
         REJECTED: 'danger', FAILED: 'danger', SUCCESS: 'success'
       },
       statusIcon: {
+        REVIEW: 'el-icon-view', TESTING: 'el-icon-s-check', ACCEPTING: 'el-icon-s-claim',
         PENDING: 'el-icon-time', APPROVED: 'el-icon-check', DEPLOYING: 'el-icon-loading',
         REJECTED: 'el-icon-close', FAILED: 'el-icon-circle-close', SUCCESS: 'el-icon-circle-check'
       },
-      typeNames: { FULL: '全量', INCREMENT: '增量', ROLLBACK: '回滚' },
       modeNames: { AUTO: '自动', MANUAL: '手动' },
       actionNames: {
         APPLY: '提交申请', APPROVE: '审批通过', REJECT: '审批驳回',
@@ -358,7 +357,6 @@ export default {
         APPLY: 'info', APPROVE: 'success', REJECT: 'danger',
         START_DEPLOY: 'primary', FINISH: 'success', FAIL: 'danger', ROLLBACK: 'warning'
       },
-      envNames: { DEV: '开发环境', TEST: '测试环境', PROD: '生产环境' },
       rules: {
         appId: [
           {required: true, message: '请选择应用', trigger: 'change'},
@@ -370,19 +368,38 @@ export default {
     }
   },
   computed: {
-    uploadAction() {
-      const base = process.env.VUE_APP_API_BASE_URL || '/api'
-      return base + '/files/upload'
+    scopeHint() {
+      const role = this.user.role
+      if (role === 'DEV') return '只显示你提交的发布单'
+      if (role === 'TL') return '只显示生产环境中待你技术审查的发布单'
+      if (role === 'QA') return '只显示待你测试验收的发布单，包括测试环境和生产环境'
+      if (role === 'PM') return '只显示生产环境中待你产品验收的发布单'
+      if (role === 'OPS') return '只显示已交给运维的发布单，不含还在审查或验收中的单'
+      return ''
     },
-    uploadHeaders() {
-      const user = JSON.parse(localStorage.getItem('xm-user') || '{}')
-      return { token: user.token || '' }
+    visibleStatusOptions() {
+      const role = this.user.role
+      const all = this.statusOptions
+      if (role === 'TL') return all.filter(item => item.value === 'REVIEW')
+      if (role === 'QA') return all.filter(item => item.value === 'TESTING')
+      if (role === 'PM') return all.filter(item => item.value === 'ACCEPTING')
+      if (role === 'OPS') return all.filter(item => ['PENDING', 'APPROVED', 'DEPLOYING', 'SUCCESS', 'FAILED'].includes(item.value))
+      return all
+    },
+    flowHint() {
+      const server = this.serverList.find(v => v.id === this.form.serverId)
+      const env = server && server.env
+      if (env === 'DEV') return '开发环境：提交后直接由运维审批并执行'
+      if (env === 'TEST') return '测试环境：测试验收通过后，由运维审批并执行'
+      if (env === 'PROD') return '生产环境：技术审查 → 测试验收 → 产品验收 → 运维审批并执行'
+      return '请选择目标服务器，流程随环境而定'
     },
     actionTitle() {
       const row = this.actionRow
       const no = row && row.deployNo ? row.deployNo : ''
       const names = {
-        approve: '审批部署',
+        approve: '运维审批',
+        review: '审查验收',
         edit: '修改申请',
         start: '开始部署',
         manual: '手动部署',
@@ -424,11 +441,14 @@ export default {
     roleTag,
     canDev,
     canOps,
+    canTl,
+    canQa,
+    canPm,
     modeChosen(row) {
       return row && (row.status === 'DEPLOYING' || row.status === 'SUCCESS' || row.status === 'FAILED')
     },
     canEditDeploy(row) {
-      if (row.status !== 'PENDING') return false
+      if (row.status !== 'REVIEW') return false
       if (isAdmin(this.user)) return true
       return this.user.role === 'DEV' && row.applicant === this.user.username
     },
@@ -469,33 +489,33 @@ export default {
         this.form.serverId = app.serverId
       }
     },
-    handleApply() {   // 发起部署申请
-      this.form = { deployType: 'FULL' }
-      this.artifactName = ''
-      this.artifactUrl = ''
+    handleApply() {
+      this.form = {}
+      this.repoScript = ''
       this.fromVisible = true
     },
-    onArtifactUploaded(res, file) {
-      if (res && res.code === '200') {
-        this.artifactUrl = res.data
-        this.artifactName = file.name
-        this.$message.success('制品已上传，保存申请时会登记到当前版本')
-      } else {
-        this.$message.error((res && res.msg) || '上传失败')
-      }
-    },
-    registerArtifact() {
-      if (!this.artifactUrl || !this.form.appId || !this.form.version) {
+    buildRepoScript() {
+      const app = this.appList.find(v => v.id === this.form.appId)
+      if (!app || !this.form.version || !this.form.serverId) {
+        this.$message.warning('请先选择应用、目标服务器并填写版本')
         return
       }
-      this.$request.post('/deployArtifact/register', {
-        appId: this.form.appId,
+      if (!app.repoUrl) {
+        this.$message.warning('该应用未配置代码仓库地址')
+        return
+      }
+      this.$request.post('/app/repoScript', {
+        name: app.name,
+        code: app.code,
         version: this.form.version,
-        fileName: this.artifactName,
-        filePath: this.artifactUrl
+        repoUrl: app.repoUrl,
+        serverId: this.form.serverId
       }).then(res => {
-        if (res.code !== '200') {
-          this.$message.error(res.msg || '制品登记失败')
+        if (res.code === '200') {
+          this.repoScript = res.data || ''
+        } else {
+          this.repoScript = ''
+          this.$message.error(res.msg)
         }
       })
     },
@@ -511,8 +531,7 @@ export default {
             method: this.form.id ? 'PUT' : 'POST',
             data: this.form
           }).then(res => {
-            if (res.code === '200') {  // 表示成功保存
-              this.registerArtifact()
+            if (res.code === '200') {
               this.$message.success('保存成功')
               this.load(1)
               this.fromVisible = false
@@ -527,8 +546,9 @@ export default {
       this.approveForm = { id: row.id, deployNo: row.deployNo, result: result, remark: '' }
     },
     submitApprove() {
+      const review = this.actionScene === 'review'
       this.$request({
-        url: '/deploy/approve/' + this.approveForm.id,
+        url: (review ? '/deploy/gate/' : '/deploy/approve/') + this.approveForm.id,
         method: 'PUT',
         params: { result: this.approveForm.result, remark: this.approveForm.remark }
       }).then(res => {
@@ -542,6 +562,9 @@ export default {
       })
     },
     sceneOf(row) {
+      if (canTl(this.user) && row.status === 'REVIEW') return 'review'
+      if (canQa(this.user) && row.status === 'TESTING') return 'review'
+      if (canPm(this.user) && row.status === 'ACCEPTING') return 'review'
       if (canOps(this.user) && row.status === 'PENDING') return 'approve'
       if (this.canEditDeploy(row)) return 'edit'
       if (canOps(this.user) && row.status === 'APPROVED') return 'start'
@@ -551,6 +574,10 @@ export default {
       return 'view'
     },
     actionLabel(row) {
+      const scene = this.sceneOf(row)
+      if (scene === 'review') {
+        return row.status === 'REVIEW' ? '审查' : '验收'
+      }
       const map = {
         approve: '审批',
         edit: '修改',
@@ -560,10 +587,11 @@ export default {
         rollback: '回滚',
         view: '查看'
       }
-      return map[this.sceneOf(row)] || '查看'
+      return map[scene] || '查看'
     },
     actionIcon(row) {
       const map = {
+        review: 'el-icon-s-check',
         approve: 'el-icon-check',
         edit: 'el-icon-edit',
         start: 'el-icon-video-play',
@@ -578,8 +606,8 @@ export default {
       this.actionRow = row
       this.actionScene = this.sceneOf(row)
       this.sshLarge = false
-      if (this.actionScene === 'approve') {
-        this.handleApprove(row, 'APPROVED')
+      if (this.actionScene === 'approve' || this.actionScene === 'review') {
+        this.handleApprove(row, this.actionScene === 'review' ? 'PASS' : 'APPROVED')
       }
       if (this.actionScene === 'start') {
         this.startForm = { id: row.id, deployNo: row.deployNo, serverName: row.serverName, executeMode: 'AUTO' }

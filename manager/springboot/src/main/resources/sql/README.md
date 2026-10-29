@@ -9,11 +9,19 @@
 | 顺序 | 文件 | 做什么 |
 |---|---|---|
 | 1 | `schema.sql` | 建表。不创建数据库，执行前先 `USE manager`。表结构里已经包含后面升级脚本要补的列和外键 |
-| 2 | `data.sql` | 初始数据。密码已经是 `MD5(明文 + 盐值)` |
+| 2 | `data.sql` | 初始演示数据：人员 + 各模块全状态业务数据。密码已经是 `MD5(明文 + 盐值)` |
 
 `upgrade_admin.sql`、`upgrade_alarm.sql` 的文件头写了：全新安装走 `schema.sql`，不必再执行本脚本。`upgrade_password.sql` 和 `upgrade_fk.sql` 同样不要在新库上跑。
 
-Docker 首次启动（`mysql-data` 卷是空的）只会挂载并执行 `schema.sql`、`data.sql`。
+## 已有库：清空业务数据并重灌演示集
+
+人员账号（`person`）不动，只重建公告、项目、服务器、应用、部署、日志、执行、制品、告警时：
+
+```sql
+SOURCE demo_seed.sql;
+```
+
+`demo_seed.sql` 会 `TRUNCATE` 上述业务表后写入与 `data.sql` 一致的演示集（覆盖审批/自动与手动部署/失败回滚/告警闭环等场景；部署与告警时间用相对今天的日期，保证「发布分析」近 7/30 天曲线有密度）。结构须已含 SSH、`execute_mode` 等列（新库用 `schema.sql`；旧库先跑下文升级脚本）。需要重新生成种子时，可运行同目录 `_gen_demo_seed.py`。
 
 ## 已有库升级
 
@@ -56,5 +64,6 @@ SOURCE upgrade_fk.sql;
 | 8 | `upgrade_deploy_execution.sql` | 新建 `deploy_execution`，外键指向 `deploy.id` | 先有 `deploy` |
 | 9 | `upgrade_deploy_artifact.sql` | 新建 `deploy_artifact`，外键指向 `app.id` | 先有 `app` |
 | 10 | `upgrade_deploy_execute_mode.sql` | 给 `deploy` 补 `execute_mode`，已有行默认 `AUTO` | 只改 `deploy` |
+| 11 | `upgrade_person.sql` | 把 `admin` / `dev` / `ops` 合并进 `person` 后删除旧表。用户名冲突时保留已写入的 `person` 行 | 旧三张表还在时才搬数据。人员主键会重排，已登录 token 需重新登录 |
 
-全新安装用 `schema.sql` 即可，这些升级脚本不要再跑。Docker 空卷初始化也只执行 `schema.sql` 和 `data.sql`。
+全新安装用 `schema.sql` 即可，这些升级脚本不要再跑。

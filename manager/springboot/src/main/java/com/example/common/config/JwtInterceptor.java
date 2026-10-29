@@ -7,12 +7,10 @@ import com.auth0.jwt.algorithms.Algorithm;
 import com.auth0.jwt.exceptions.JWTVerificationException;
 import com.example.common.Constants;
 import com.example.common.enums.ResultCodeEnum;
-import com.example.common.enums.RoleEnum;
-import com.example.entity.Account;
+import com.example.common.enums.AccountStatusEnum;
+import com.example.entity.Person;
 import com.example.exception.BusinessException;
-import com.example.service.AdminService;
-import com.example.service.DevService;
-import com.example.service.OpsService;
+import com.example.service.PersonService;
 import com.example.utils.TokenUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -32,13 +30,7 @@ public class JwtInterceptor implements HandlerInterceptor {
     private static final Logger log = LoggerFactory.getLogger(JwtInterceptor.class);
 
     @Resource
-    private AdminService adminService;
-
-    @Resource
-    private DevService devService;
-
-    @Resource
-    private OpsService opsService;
+    private PersonService personService;
 
     @Override
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) {
@@ -52,25 +44,23 @@ public class JwtInterceptor implements HandlerInterceptor {
         if (ObjectUtil.isEmpty(token)) {
             throw new BusinessException(ResultCodeEnum.TOKEN_INVALID_ERROR);
         }
-        Account account = null;
+        Person person;
         try {
-            // 解析token获取存储的数据
             String userRole = JWT.decode(token).getAudience().get(0);
             String userId = userRole.split("-")[0];
             String role = userRole.split("-")[1];
-            // 根据角色查询对应的表
-            if (RoleEnum.ADMIN.name().equals(role)) {
-                account = adminService.selectById(Integer.valueOf(userId));
-            } else if (RoleEnum.DEV.name().equals(role)) {
-                account = devService.selectById(Integer.valueOf(userId));
-            } else if (RoleEnum.OPS.name().equals(role)) {
-                account = opsService.selectById(Integer.valueOf(userId));
+            person = personService.selectById(Integer.valueOf(userId));
+            if (person != null && !role.equals(person.getRole())) {
+                person = null;
             }
         } catch (Exception e) {
             throw new BusinessException(ResultCodeEnum.TOKEN_CHECK_ERROR);
         }
-        if (ObjectUtil.isNull(account)) {
+        if (ObjectUtil.isNull(person)) {
             throw new BusinessException(ResultCodeEnum.USER_NOT_EXIST_ERROR);
+        }
+        if (AccountStatusEnum.DISABLED.name().equals(person.getStatus())) {
+            throw new BusinessException(ResultCodeEnum.USER_DISABLED_ERROR);
         }
         try {
             // 使用配置的 jwt.secret 验签（与 TokenUtils.createToken 一致）

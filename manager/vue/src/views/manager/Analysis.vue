@@ -8,6 +8,28 @@
       </el-radio-group>
       <p class="page-note">工作台近 14 天只看发布次数。本页按时间窗拆开：成败趋势、失败落在哪、日志错误类型、告警走势。</p>
     </div>
+    <div class="kpi-row">
+      <div class="kpi">
+        <div class="kpi-label">完成发布</div>
+        <div class="kpi-value">{{ summary.total }}</div>
+      </div>
+      <div class="kpi kpi-danger">
+        <div class="kpi-label">失败次数</div>
+        <div class="kpi-value">{{ summary.failed }}</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-label">失败率</div>
+        <div class="kpi-value">{{ summary.rate }}</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-label">告警合计</div>
+        <div class="kpi-value">{{ summary.alarms }}</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-label">错误 TOP1</div>
+        <div class="kpi-value kpi-top">{{ summary.topError }}</div>
+      </div>
+    </div>
     <div class="charts">
       <section class="panel panel-wide">
         <header>
@@ -55,7 +77,8 @@ export default {
       pieBy: 'app',
       byApp: [],
       byServer: [],
-      charts: []
+      charts: [],
+      summary: { total: 0, failed: 0, rate: '—', alarms: 0, topError: '—' }
     }
   },
   created() {
@@ -78,13 +101,27 @@ export default {
         const fail = failure.data || { byApp: [], byServer: [], byDay: [] }
         this.byApp = fail.byApp || []
         this.byServer = fail.byServer || []
+        const byDay = fail.byDay || []
+        const errors = errorTop.data || []
+        const alarms = alarm.data || []
+        const total = byDay.reduce((sum, row) => sum + Number(row.total || 0), 0)
+        const failed = byDay.reduce((sum, row) => sum + Number(row.count || 0), 0)
+        const alarmSum = alarms.reduce((sum, row) => sum + Number(row.count || 0), 0)
+        const top = errors.filter(row => Number(row.count) > 0)[0]
+        this.summary = {
+          total,
+          failed,
+          rate: total ? ((failed / total) * 100).toFixed(1) + '%' : '—',
+          alarms: alarmSum,
+          topError: top ? `${top.keyword}×${top.count}` : '—'
+        }
         this.charts.forEach(chart => chart.dispose())
         this.charts = []
         this.$nextTick(() => {
-          this.drawOutcome(fail.byDay || [])
+          this.drawOutcome(byDay)
           this.drawPie()
-          this.drawErrors(errorTop.data || [])
-          this.drawAlarm(alarm.data || [])
+          this.drawErrors(errors)
+          this.drawAlarm(alarms)
         })
       })
     },
@@ -314,6 +351,37 @@ export default {
   font-size: 13px;
   line-height: 1.5;
 }
+.kpi-row {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 14px;
+}
+.kpi {
+  background: #fff;
+  border: 1px solid #e9eef5;
+  border-radius: 12px;
+  padding: 12px 14px;
+  box-shadow: 0 6px 18px rgba(31, 42, 68, 0.05);
+}
+.kpi-danger .kpi-value {
+  color: #f56c6c;
+}
+.kpi-label {
+  color: #86909c;
+  font-size: 12px;
+  margin-bottom: 6px;
+}
+.kpi-value {
+  color: #1f2a44;
+  font-size: 22px;
+  font-weight: 650;
+  line-height: 1.2;
+}
+.kpi-value.kpi-top {
+  font-size: 16px;
+  word-break: break-all;
+}
 .charts {
   display: grid;
   grid-template-columns: 1.05fr 0.95fr;
@@ -362,6 +430,9 @@ export default {
   .toolbar {
     flex-direction: column;
     align-items: flex-start;
+  }
+  .kpi-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
   .charts {
     grid-template-columns: 1fr;

@@ -1,131 +1,462 @@
 -- ============================================================
--- DevOps 运维管理系统 - 测试数据脚本
+-- DevOps 发布管理系统 - 初始/演示数据
 -- 目标库：manager（请先执行 schema.sql）
 -- 说明：
---   1. 显式指定主键 id，保证 app / deploy / deploy_log / alarm 的关联关系稳定
---   2. 密码存储为 MD5(明文 + 盐值)，盐值须与 Constants.PASSWORD_SALT 一致
---   3. create_time / update_time 交由数据库默认值填充
+--   1. 人员账号保留为演示账号；业务表覆盖各模块全状态，便于答辩展示
+--   2. 密码为 MD5(明文 + 盐值)，盐值与 Constants.PASSWORD_SALT 一致
+--   3. 已有库仅重置业务数据时，用同目录 demo_seed.sql（会 TRUNCATE 业务表，不动人员）
+--   4. 部署/告警时间用相对今天的表达式，保证「发布分析」近 7/30 天有曲线
 -- ============================================================
 
 SET NAMES utf8mb4;
 
 -- ----------------------------
--- 0. 超级管理员（登录：admin / admin）
+-- 0. 人员（管理员 / 开发 / 运维）
+--    admin / admin，dev1、dev2、tl1、qa1、pm1、ops1、ops2 / 123456
 -- ----------------------------
-INSERT INTO `admin` (`id`, `username`, `password`, `name`, `phone`, `email`, `role`, `status`) VALUES
-(1, 'admin', MD5(CONCAT('admin', 'devops_salt_2026')), '超级管理员', '13677889922', 'admin@xm.com', 'ADMIN', 'ACTIVE');
+INSERT INTO `person` (`id`, `username`, `password`, `name`, `phone`, `email`, `role`, `status`) VALUES
+(1, 'admin', MD5(CONCAT('admin', 'devops_salt_2026')), '超级管理员', '13677889922', 'admin@xm.com', 'ADMIN', 'ACTIVE'),
+(2, 'dev1', MD5(CONCAT('123456', 'devops_salt_2026')), '张伟', '13800010001', 'dev1@devops.com', 'DEV', 'ACTIVE'),
+(3, 'dev2', MD5(CONCAT('123456', 'devops_salt_2026')), '李娜', '13800010002', 'dev2@devops.com', 'DEV', 'ACTIVE'),
+(4, 'tl1', MD5(CONCAT('123456', 'devops_salt_2026')), '陈磊', '13700030001', 'tl1@devops.com', 'TL', 'ACTIVE'),
+(5, 'qa1', MD5(CONCAT('123456', 'devops_salt_2026')), '周婷', '13700030002', 'qa1@devops.com', 'QA', 'ACTIVE'),
+(6, 'pm1', MD5(CONCAT('123456', 'devops_salt_2026')), '孙悦', '13700030003', 'pm1@devops.com', 'PM', 'ACTIVE'),
+(7, 'ops1', MD5(CONCAT('123456', 'devops_salt_2026')), '王强', '13900020001', 'ops1@devops.com', 'OPS', 'ACTIVE'),
+(8, 'ops2', MD5(CONCAT('123456', 'devops_salt_2026')), '赵敏', '13900020002', 'ops2@devops.com', 'OPS', 'ACTIVE');
 
 -- ----------------------------
--- 0.1 系统公告（3条）
+-- 系统公告（展示产品价值与操作主线）
 -- ----------------------------
 INSERT INTO `notice` (`id`, `title`, `content`, `time`, `user`) VALUES
-(1, '欢迎使用发布管理系统', '按 项目 → 应用 → 部署单 → 告警 追溯。开发提交发布申请，运维审批后可选自动部署（SSH）或手动终端执行。', '2026-09-23', 'admin'),
-(2, '三角色怎么用', '开发：维护项目/应用并新建发布申请。运维：登记服务器与 SSH、审批并执行部署、接手告警。管理员：全量菜单与人员公告。', '2026-09-23', 'admin'),
-(3, '演示账号与注意', '账号：admin/admin、dev1/123456、ops1/123456。服务器需先开通 SSH 密钥后再自动部署；自动模式需已有制品。', '2026-09-23', 'admin');
+(1, '发布闭环已就绪', '请按 项目→应用→部署单→告警 追溯。开发提交申请，运维审批后可选自动部署（SSH）或手动终端。', DATE_FORMAT(CURDATE(), '%Y-%m-%d'), 'admin'),
+(2, '今天演示看什么', '① 待审批单（运维 inbox）② 部署中进度与执行日志 ③ 失败单与回滚成功单 ④ 发布分析：成败趋势/失败分布/错误 TOP/告警走势。', DATE_FORMAT(CURDATE(), '%Y-%m-%d'), 'admin'),
+(3, '账号与注意', 'admin/admin、dev1/123456、ops1/123456。SSH 已开通的服务器显示「已开通」；自动部署需制品。', DATE_FORMAT(CURDATE(), '%Y-%m-%d'), 'admin');
 
 -- ----------------------------
--- 1. 开发人员（2条）
--- ----------------------------
-INSERT INTO `dev` (`id`, `username`, `password`, `name`, `phone`, `email`, `status`) VALUES
-(1, 'dev1', MD5(CONCAT('123456', 'devops_salt_2026')), '张伟', '13800010001', 'dev1@devops.com', 'ACTIVE'),
-(2, 'dev2', MD5(CONCAT('123456', 'devops_salt_2026')), '李娜', '13800010002', 'dev2@devops.com', 'ACTIVE');
-
--- ----------------------------
--- 2. 运维人员（2条）
--- ----------------------------
-INSERT INTO `ops` (`id`, `username`, `password`, `name`, `phone`, `email`, `status`) VALUES
-(1, 'ops1', MD5(CONCAT('123456', 'devops_salt_2026')), '王强', '13900020001', 'ops1@devops.com', 'ACTIVE'),
-(2, 'ops2', MD5(CONCAT('123456', 'devops_salt_2026')), '赵敏', '13900020002', 'ops2@devops.com', 'ACTIVE');
-
--- ----------------------------
--- 3. 项目（5条，覆盖 NOT_STARTED / IN_PROGRESS / PAUSED / FINISHED 四种状态）
+-- 项目：4 种状态全覆盖
 -- ----------------------------
 INSERT INTO `project` (`id`, `name`, `code`, `tech_stack`, `leader`, `status`, `start_date`, `end_date`, `description`) VALUES
-(1, '电商交易平台', 'PRJ-001', 'Spring Boot + Vue2 + MySQL + Redis', '张伟', 'IN_PROGRESS', '2025-03-01', '2025-12-31', '面向 C 端的电商交易平台，包含商品、订单、支付、库存等核心链路'),
-(2, '统一用户中心', 'PRJ-002', 'Spring Cloud + MySQL + Redis + JWT', '李娜', 'IN_PROGRESS', '2025-01-15', '2025-09-30', '为集团各业务线提供统一的账号注册、登录鉴权与权限管理能力'),
-(3, '数据可视化大屏', 'PRJ-003', 'Vue2 + ECharts + Nginx', '王强', 'FINISHED', '2024-06-01', '2024-12-20', '经营指标实时可视化大屏，已完成验收并交付运营部门使用'),
-(4, '移动端APP后台', 'PRJ-004', 'Spring Boot + MongoDB + RabbitMQ', '赵敏', 'PAUSED', '2025-02-10', '2025-11-30', '移动端 APP 服务端项目，因产品需求调整暂停开发'),
-(5, '智能运维监控平台', 'PRJ-005', 'Spring Boot + 自研探活', '陈磊', 'NOT_STARTED', '2026-01-05', '2026-08-31', '统一采集主机与应用指标，提供告警与自愈能力，尚未启动开发');
+(1, '电商交易平台', 'PRJ-001', 'Spring Boot + Vue2 + MySQL + Redis', '张伟', 'IN_PROGRESS', DATE_SUB(CURDATE(), INTERVAL 180 DAY), DATE_ADD(CURDATE(), INTERVAL 90 DAY), '核心交易链路，演示全量/增量/回滚与生产发布'),
+(2, '统一用户中心', 'PRJ-002', 'Spring Boot + JWT + Redis', '李娜', 'IN_PROGRESS', DATE_SUB(CURDATE(), INTERVAL 200 DAY), DATE_ADD(CURDATE(), INTERVAL 60 DAY), '认证与用户服务，演示失败发布与配置类告警'),
+(3, '经营数据大屏', 'PRJ-003', 'Vue2 + ECharts + Nginx', '王强', 'FINISHED', DATE_SUB(CURDATE(), INTERVAL 400 DAY), DATE_SUB(CURDATE(), INTERVAL 200 DAY), '已交付项目，演示稳定在线与历史成功单'),
+(4, '移动端网关', 'PRJ-004', 'Spring Cloud Gateway', '赵敏', 'PAUSED', DATE_SUB(CURDATE(), INTERVAL 150 DAY), DATE_ADD(CURDATE(), INTERVAL 120 DAY), '需求调整暂停，演示 APPROVED 等待窗口'),
+(5, '智能探活平台', 'PRJ-005', 'Spring Boot + 探活', '张伟', 'NOT_STARTED', DATE_ADD(CURDATE(), INTERVAL 10 DAY), DATE_ADD(CURDATE(), INTERVAL 180 DAY), '尚未启动，演示 PENDING 初版申请');
 
 -- ----------------------------
--- 4. 服务器（8条，DEV / TEST / PROD 三种环境均有，状态各异）
+-- 服务器：DEV/TEST/PROD + RUNNING/STOPPED/MAINTENANCE + KEY/PASSWORD
 -- ----------------------------
-INSERT INTO `server` (`id`, `hostname`, `ip`, `os`, `cpu`, `memory`, `disk`, `env`, `status`, `remark`) VALUES
-(1, 'app-dev-01', '192.168.10.11', 'CentOS 7.9', '4', '8GB', '100GB', 'DEV', 'RUNNING', '开发环境应用服务器，日常联调使用'),
-(2, 'app-dev-02', '192.168.10.12', 'Ubuntu 20.04', '4', '8GB', '100GB', 'DEV', 'STOPPED', '开发环境备用机，暂未启用'),
-(3, 'app-test-01', '192.168.20.11', 'CentOS 7.9', '8', '16GB', '200GB', 'TEST', 'RUNNING', '测试环境应用服务器，承载回归测试'),
-(4, 'app-test-02', '192.168.20.12', 'Ubuntu 22.04', '8', '16GB', '200GB', 'TEST', 'MAINTENANCE', '测试环境服务器，正在升级内核'),
-(5, 'app-prod-01', '10.0.1.11', 'CentOS 7.9', '16', '32GB', '500GB', 'PROD', 'RUNNING', '生产环境应用主节点'),
-(6, 'app-prod-02', '10.0.1.12', 'CentOS 7.9', '16', '32GB', '500GB', 'PROD', 'RUNNING', '生产环境应用从节点，与主节点负载均衡'),
-(7, 'db-prod-01', '10.0.1.21', 'CentOS 7.9', '32', '64GB', '1TB', 'PROD', 'RUNNING', '生产环境数据库主库'),
-(8, 'db-prod-02', '10.0.1.22', 'CentOS 7.9', '32', '64GB', '1TB', 'PROD', 'MAINTENANCE', '生产环境数据库备库，正在做数据校验');
+INSERT INTO `server` (`id`, `hostname`, `ip`, `os`, `cpu`, `memory`, `disk`, `env`, `status`, `remark`,
+                      `ssh_port`, `ssh_user`, `ssh_auth_type`, `ssh_password`, `ssh_private_key`, `deploy_path`) VALUES
+(1, 'app-dev-01',  '192.168.10.11', 'CentOS 7.9',  '4',  '8GB',  '100GB', 'DEV',  'RUNNING',     '开发联调主节点', 22, 'deploy', 'KEY',      NULL, NULL, '/opt/apps'),
+(2, 'app-dev-02',  '192.168.10.12', 'Ubuntu 22.04','4',  '8GB',  '100GB', 'DEV',  'STOPPED',     '开发备用机未启用', 22, 'deploy', 'PASSWORD', NULL, NULL, '/opt/apps'),
+(3, 'app-test-01', '192.168.20.11', 'CentOS 7.9',  '8',  '16GB', '200GB', 'TEST', 'RUNNING',     '回归测试机', 22, 'deploy', 'KEY',      NULL, NULL, '/opt/apps'),
+(4, 'app-test-02', '192.168.20.12', 'Ubuntu 22.04','8',  '16GB', '200GB', 'TEST', 'MAINTENANCE', '内核升级维护中', 22, 'deploy', 'PASSWORD', NULL, NULL, '/opt/apps'),
+(5, 'app-prod-01', '10.0.1.11',     'CentOS 7.9',  '16', '32GB', '500GB', 'PROD', 'RUNNING',     '生产主节点', 22, 'deploy', 'KEY',      NULL, NULL, '/opt/apps'),
+(6, 'app-prod-02', '10.0.1.12',     'CentOS 7.9',  '16', '32GB', '500GB', 'PROD', 'RUNNING',     '生产从节点', 22, 'deploy', 'KEY',      NULL, NULL, '/opt/apps'),
+(7, 'ops-jump-01', '10.0.1.5',      'Ubuntu 22.04','2',  '4GB',  '50GB',  'PROD', 'RUNNING',     '跳板机（待开通密钥）', 22, 'ops', 'PASSWORD', NULL, NULL, '/opt/jump');
 
 -- ----------------------------
--- 5. 应用（8条，关联已有项目与服务器）
+-- 应用：ONLINE / DEPLOYING / OFFLINE
 -- ----------------------------
 INSERT INTO `app` (`id`, `name`, `code`, `project_id`, `server_id`, `port`, `version`, `tech_stack`, `repo_url`, `status`) VALUES
-(1, '交易服务', 'APP-001', 1, 5, 8081, 'v2.3.1', 'Spring Boot + MyBatis + Redis', 'http://git.devops.com/shop/trade-service.git', 'ONLINE'),
-(2, '订单服务', 'APP-002', 1, 6, 8082, 'v2.1.0', 'Spring Boot + MyBatis + RabbitMQ', 'http://git.devops.com/shop/order-service.git', 'ONLINE'),
-(3, '前端门户', 'APP-003', 1, 3, 8080, 'v1.9.4', 'Vue2 + Element UI + Nginx', 'http://git.devops.com/shop/shop-portal.git', 'ONLINE'),
-(4, '统一认证服务', 'APP-004', 2, 5, 8083, 'v1.5.2', 'Spring Boot + JWT + Redis', 'http://git.devops.com/uc/auth-service.git', 'ONLINE'),
-(5, '用户中心服务', 'APP-005', 2, 1, 8084, 'v1.4.0', 'Spring Boot + MyBatis + MySQL', 'http://git.devops.com/uc/user-service.git', 'OFFLINE'),
-(6, '数据大屏服务', 'APP-006', 3, 3, 8085, 'v1.0.6', 'Vue2 + ECharts + Nginx', 'http://git.devops.com/bi/dashboard.git', 'ONLINE'),
-(7, '移动端网关', 'APP-007', 4, 2, 8086, 'v0.9.1', 'Spring Cloud Gateway + MongoDB', 'http://git.devops.com/app/mobile-gateway.git', 'OFFLINE'),
-(8, '监控采集服务', 'APP-008', 5, 4, 8087, 'v0.1.0', 'Spring Boot + 自研探活', 'http://git.devops.com/ops/monitor-agent.git', 'OFFLINE');
+(1, '交易服务',     'APP-001', 1, 5, 8081, 'v2.3.1', 'Spring Boot + Redis',     'http://git.example.com/shop/trade.git',   'ONLINE'),
+(2, '订单服务',     'APP-002', 1, 6, 8082, 'v2.1.0', 'Spring Boot + MQ',        'http://git.example.com/shop/order.git',   'ONLINE'),
+(3, '商城门户',     'APP-003', 1, 3, 8080, 'v1.9.4', 'Vue2 + Nginx',            'http://git.example.com/shop/portal.git',  'ONLINE'),
+(4, '统一认证',     'APP-004', 2, 5, 8083, 'v1.5.1', 'Spring Boot + JWT',       'http://git.example.com/uc/auth.git',      'OFFLINE'),
+(5, '用户中心',     'APP-005', 2, 1, 8084, 'v1.4.0', 'Spring Boot + MySQL',     'http://git.example.com/uc/user.git',      'OFFLINE'),
+(6, '经营大屏',     'APP-006', 3, 3, 8085, 'v1.0.6', 'Vue2 + ECharts',          'http://git.example.com/bi/dash.git',      'ONLINE'),
+(7, '移动网关',     'APP-007', 4, 1, 8086, 'v0.9.1', 'Spring Cloud Gateway',    'http://git.example.com/app/gateway.git',  'DEPLOYING'),
+(8, '探活采集',     'APP-008', 5, 4, 8087, 'v0.1.0', 'Spring Boot',             'http://git.example.com/ops/agent.git',    'OFFLINE');
 
 -- ----------------------------
--- 6. 部署单（10条，覆盖 PENDING / APPROVED / REJECTED / DEPLOYING / SUCCESS / FAILED 全部状态）
+-- 制品（自动部署依赖）
 -- ----------------------------
-INSERT INTO `deploy` (`id`, `deploy_no`, `app_id`, `server_id`, `version`, `deploy_type`, `status`, `applicant`, `approver`, `apply_time`, `approve_time`, `finish_time`, `reason`, `remark`) VALUES
-(1, 'DP-20250901-001', 1, 5, 'v2.3.1', 'FULL', 'SUCCESS', 'dev1', 'ops1', '2025-09-01 09:10:00', '2025-09-01 09:30:00', '2025-09-01 10:05:00', '交易服务新增优惠券核销功能，需全量发布', '发布顺利，已完成线上验证'),
-(2, 'DP-20250903-002', 2, 6, 'v2.1.0', 'INCREMENT', 'SUCCESS', 'dev1', 'ops1', '2025-09-03 10:00:00', '2025-09-03 10:20:00', '2025-09-03 10:50:00', '修复订单超时未关闭的问题', '增量发布，仅替换业务 jar'),
-(3, 'DP-20250905-003', 3, 3, 'v1.9.4', 'FULL', 'SUCCESS', 'dev2', 'ops2', '2025-09-05 14:00:00', '2025-09-05 14:15:00', '2025-09-05 14:45:00', '前端门户改版首页并适配移动端', '静态资源已刷新 CDN 缓存'),
-(4, 'DP-20250908-004', 4, 5, 'v1.5.2', 'INCREMENT', 'FAILED', 'dev2', 'ops1', '2025-09-08 09:00:00', '2025-09-08 09:20:00', '2025-09-08 09:55:00', '认证服务升级 JWT 签名算法', '启动时读取不到新密钥配置，发布失败'),
-(5, 'DP-20250909-005', 1, 5, 'v2.3.0', 'ROLLBACK', 'SUCCESS', 'ops1', 'ops2', '2025-09-09 11:00:00', '2025-09-09 11:05:00', '2025-09-09 11:25:00', '线上出现批量下单失败，回滚至上一稳定版本', '回滚完成，业务指标恢复正常'),
-(6, 'DP-20250910-006', 5, 1, 'v1.4.0', 'FULL', 'REJECTED', 'dev1', 'ops2', '2025-09-10 15:00:00', '2025-09-10 15:30:00', NULL, '用户中心服务提测部署', '缺少数据库变更脚本与回滚方案，驳回重提'),
-(7, 'DP-20250911-007', 6, 3, 'v1.0.6', 'INCREMENT', 'DEPLOYING', 'dev2', 'ops1', '2025-09-11 09:30:00', '2025-09-11 09:45:00', NULL, '大屏新增经营指标看板', '正在灰度发布中'),
-(8, 'DP-20250912-008', 7, 2, 'v0.9.1', 'FULL', 'APPROVED', 'dev1', 'ops1', '2025-09-12 10:00:00', '2025-09-12 10:20:00', NULL, '移动端网关首次部署至开发环境', '已批准，等待发布窗口'),
-(9, 'DP-20250912-009', 8, 4, 'v0.1.0', 'FULL', 'PENDING', 'dev2', NULL, '2025-09-12 16:00:00', NULL, NULL, '监控采集服务初版部署验证', '等待运维审批'),
-(10, 'DP-20250913-010', 2, 6, 'v2.1.1', 'INCREMENT', 'PENDING', 'dev1', NULL, '2025-09-13 09:00:00', NULL, NULL, '订单服务修复金额计算精度问题', '等待运维审批');
+INSERT INTO `deploy_artifact` (`id`, `app_id`, `version`, `file_name`, `file_path`, `file_size`, `md5`, `uploader`) VALUES
+(1, 1, 'v2.3.1', 'trade-v2.3.1.jar', '/data/artifacts/trade-v2.3.1.jar', 52428800, 'a1b2c3d4e5f60718293a4b5c6d7e8f90', 'dev1'),
+(2, 1, 'v2.3.0', 'trade-v2.3.0.jar', '/data/artifacts/trade-v2.3.0.jar', 51380224, 'b2c3d4e5f60718293a4b5c6d7e8f90a1', 'dev1'),
+(3, 2, 'v2.1.0', 'order-v2.1.0.jar', '/data/artifacts/order-v2.1.0.jar', 41943040, 'c3d4e5f60718293a4b5c6d7e8f90a1b2', 'dev1'),
+(4, 2, 'v2.1.1', 'order-v2.1.1.jar', '/data/artifacts/order-v2.1.1.jar', 42000000, 'd4e5f60718293a4b5c6d7e8f90a1b2c3', 'dev1'),
+(5, 4, 'v1.5.2', 'auth-v1.5.2.jar',  '/data/artifacts/auth-v1.5.2.jar',  31457280, 'e5f60718293a4b5c6d7e8f90a1b2c3d4', 'dev2'),
+(6, 7, 'v0.9.1', 'gateway-v0.9.1.jar','/data/artifacts/gateway-v0.9.1.jar',20971520, 'f60718293a4b5c6d7e8f90a1b2c3d4e5', 'dev1'),
+(7, 6, 'v1.0.6', 'dash-v1.0.6.zip',  '/data/artifacts/dash-v1.0.6.zip',  8388608, '018293a4b5c6d7e8f90a1b2c3d4e5f60', 'dev2');
 
 -- ----------------------------
--- 7. 部署流转记录（20条，与部署单一一对应，覆盖 7 种动作）
+-- 部署单：近 30 天成败密度 + 现场状态单（分析页 / 列表页都能看出价值）
+-- finish_time / create_time 用相对今天的日期，刷新种子后曲线不空
 -- ----------------------------
-INSERT INTO `deploy_log` (`id`, `deploy_id`, `action`, `operator`, `detail`) VALUES
-(1, 1, 'APPLY', 'dev1', '提交交易服务 v2.3.1 全量部署申请'),
-(2, 1, 'APPROVE', 'ops1', '变更方案与回滚预案齐全，审批通过'),
-(3, 1, 'FINISH', 'ops1', '部署成功，健康检查通过，接口可正常访问'),
-(4, 2, 'APPLY', 'dev1', '提交订单服务 v2.1.0 增量部署申请'),
-(5, 2, 'FINISH', 'ops1', '增量包替换完成，订单超时任务恢复正常'),
-(6, 3, 'APPLY', 'dev2', '提交前端门户 v1.9.4 全量部署申请'),
-(7, 3, 'FINISH', 'ops2', '静态资源发布完成，CDN 缓存已刷新'),
-(8, 4, 'APPLY', 'dev2', '提交统一认证服务 v1.5.2 增量部署申请'),
-(9, 4, 'APPROVE', 'ops1', '影响面评估为低风险，审批通过'),
-(10, 4, 'FAIL', 'ops1', '服务启动失败：未找到 jwt.secret 配置项，已保留现场日志'),
-(11, 5, 'APPLY', 'ops1', '线上批量下单失败，紧急提交回滚至 v2.3.0'),
-(12, 5, 'ROLLBACK', 'ops2', '回滚执行完成，下单成功率恢复至 99.9%'),
-(13, 6, 'APPLY', 'dev1', '提交用户中心服务 v1.4.0 全量部署申请'),
-(14, 6, 'REJECT', 'ops2', '驳回：缺少 DDL 变更脚本与回滚方案，请补充后重提'),
-(15, 7, 'APPLY', 'dev2', '提交数据大屏服务 v1.0.6 增量部署申请'),
-(16, 7, 'START_DEPLOY', 'ops1', '开始灰度发布，先更新 1 个节点观察 30 分钟'),
-(17, 8, 'APPLY', 'dev1', '提交移动端网关 v0.9.1 全量部署申请'),
-(18, 8, 'APPROVE', 'ops1', '开发环境部署风险可控，审批通过，等待发布窗口'),
-(19, 9, 'APPLY', 'dev2', '提交监控采集服务 v0.1.0 全量部署申请'),
-(20, 10, 'APPLY', 'dev1', '提交订单服务 v2.1.1 增量部署申请');
+INSERT INTO `deploy` (`id`, `deploy_no`, `app_id`, `server_id`, `version`, `deploy_type`, `execute_mode`, `status`,
+                      `applicant`, `approver`, `apply_time`, `approve_time`, `finish_time`, `reason`, `remark`,
+                      `rollback_version`, `row_version`) VALUES
+(1, 'DP-H001', 1, 5, 'v2.1.0', 'FULL', 'AUTO', 'SUCCESS', 'dev1', 'ops1', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 28 DAY), INTERVAL 36000 SECOND), DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 28 DAY), INTERVAL 36900 SECOND), DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 28 DAY), INTERVAL 38400 SECOND), '交易服务周版本', '探活通过', NULL, 3),
+(2, 'DP-H002', 2, 6, 'v2.0.5', 'INCREMENT', 'AUTO', 'SUCCESS', 'dev1', 'ops1', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 27 DAY), INTERVAL 50400 SECOND), DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 27 DAY), INTERVAL 51300 SECOND), DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 27 DAY), INTERVAL 52800 SECOND), '订单超时修复', '成功', NULL, 3),
+(3, 'DP-H003', 3, 3, 'v1.8.0', 'FULL', 'MANUAL', 'SUCCESS', 'dev2', 'ops2', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 26 DAY), INTERVAL 32400 SECOND), DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 26 DAY), INTERVAL 33300 SECOND), DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 26 DAY), INTERVAL 34800 SECOND), '门户静态资源', '手动完成', NULL, 3),
+(4, 'DP-H004', 4, 5, 'v1.4.8', 'INCREMENT', 'AUTO', 'FAILED', 'dev2', 'ops1', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 25 DAY), INTERVAL 39600 SECOND), DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 25 DAY), INTERVAL 40500 SECOND), DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 25 DAY), INTERVAL 42000 SECOND), '认证热更', '密钥缺失', NULL, 3),
+(5, 'DP-H005', 1, 5, 'v2.1.1', 'INCREMENT', 'AUTO', 'SUCCESS', 'dev1', 'ops1', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 25 DAY), INTERVAL 57600 SECOND), DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 25 DAY), INTERVAL 58500 SECOND), DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 25 DAY), INTERVAL 60000 SECOND), '优惠券补丁', '成功', NULL, 3),
+(6, 'DP-H006', 6, 3, 'v1.0.3', 'INCREMENT', 'AUTO', 'SUCCESS', 'dev2', 'ops1', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 24 DAY), INTERVAL 36000 SECOND), DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 24 DAY), INTERVAL 36900 SECOND), DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 24 DAY), INTERVAL 38400 SECOND), '大屏指标', '成功', NULL, 3),
+(7, 'DP-H007', 5, 1, 'v1.3.5', 'FULL', 'AUTO', 'FAILED', 'dev1', 'ops2', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 23 DAY), INTERVAL 54000 SECOND), DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 23 DAY), INTERVAL 54900 SECOND), DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 23 DAY), INTERVAL 56400 SECOND), '用户中心提测', '连接被拒', NULL, 3),
+(8, 'DP-H008', 2, 6, 'v2.0.6', 'INCREMENT', 'AUTO', 'SUCCESS', 'dev1', 'ops1', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 22 DAY), INTERVAL 32400 SECOND), DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 22 DAY), INTERVAL 33300 SECOND), DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 22 DAY), INTERVAL 34800 SECOND), '金额精度', '成功', NULL, 3),
+(9, 'DP-H009', 4, 5, 'v1.4.9', 'FULL', 'AUTO', 'FAILED', 'dev2', 'ops1', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 22 DAY), INTERVAL 64800 SECOND), DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 22 DAY), INTERVAL 65700 SECOND), DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 22 DAY), INTERVAL 67200 SECOND), '认证全量', '启动异常', NULL, 3),
+(10, 'DP-H010', 1, 6, 'v2.1.2', 'INCREMENT', 'AUTO', 'SUCCESS', 'dev1', 'ops2', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 21 DAY), INTERVAL 39600 SECOND), DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 21 DAY), INTERVAL 40500 SECOND), DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 21 DAY), INTERVAL 42000 SECOND), '从节点同步', '成功', NULL, 3),
+(11, 'DP-H011', 7, 1, 'v0.8.5', 'FULL', 'AUTO', 'SUCCESS', 'dev1', 'ops1', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 20 DAY), INTERVAL 36000 SECOND), DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 20 DAY), INTERVAL 36900 SECOND), DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 20 DAY), INTERVAL 38400 SECOND), '网关开发环境', '成功', NULL, 3),
+(12, 'DP-H012', 3, 3, 'v1.8.2', 'INCREMENT', 'MANUAL', 'SUCCESS', 'dev2', 'ops2', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 19 DAY), INTERVAL 50400 SECOND), DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 19 DAY), INTERVAL 51300 SECOND), DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 19 DAY), INTERVAL 52800 SECOND), '文案热修', '成功', NULL, 3),
+(13, 'DP-H013', 5, 1, 'v1.3.6', 'INCREMENT', 'AUTO', 'FAILED', 'dev1', 'ops1', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 18 DAY), INTERVAL 32400 SECOND), DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 18 DAY), INTERVAL 33300 SECOND), DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 18 DAY), INTERVAL 34800 SECOND), '用户中心配置', '执行超时', NULL, 3),
+(14, 'DP-H014', 2, 6, 'v2.0.7', 'FULL', 'AUTO', 'SUCCESS', 'dev1', 'ops1', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 18 DAY), INTERVAL 54000 SECOND), DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 18 DAY), INTERVAL 54900 SECOND), DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 18 DAY), INTERVAL 56400 SECOND), '订单全量', '成功', NULL, 3),
+(15, 'DP-H015', 1, 5, 'v2.2.0', 'FULL', 'AUTO', 'SUCCESS', 'dev1', 'ops1', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 17 DAY), INTERVAL 39600 SECOND), DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 17 DAY), INTERVAL 40500 SECOND), DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 17 DAY), INTERVAL 42000 SECOND), '交易大版本', '成功', NULL, 3),
+(16, 'DP-H016', 4, 5, 'v1.5.0', 'INCREMENT', 'AUTO', 'FAILED', 'dev2', 'ops2', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 16 DAY), INTERVAL 36000 SECOND), DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 16 DAY), INTERVAL 36900 SECOND), DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 16 DAY), INTERVAL 38400 SECOND), 'JWT 算法切换', '鉴权失败', NULL, 3),
+(17, 'DP-H017', 6, 3, 'v1.0.4', 'INCREMENT', 'AUTO', 'SUCCESS', 'dev2', 'ops1', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 16 DAY), INTERVAL 57600 SECOND), DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 16 DAY), INTERVAL 58500 SECOND), DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 16 DAY), INTERVAL 60000 SECOND), '大屏缓存', '成功', NULL, 3),
+(18, 'DP-H018', 8, 4, 'v0.0.9', 'FULL', 'AUTO', 'FAILED', 'dev2', 'ops1', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 15 DAY), INTERVAL 32400 SECOND), DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 15 DAY), INTERVAL 33300 SECOND), DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 15 DAY), INTERVAL 34800 SECOND), '探活初装', '权限拒绝', NULL, 3),
+(19, 'DP-H019', 1, 5, 'v2.2.1', 'INCREMENT', 'AUTO', 'SUCCESS', 'dev1', 'ops1', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 14 DAY), INTERVAL 46800 SECOND), DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 14 DAY), INTERVAL 47700 SECOND), DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 14 DAY), INTERVAL 49200 SECOND), '交易补丁', '成功', NULL, 3),
+(20, 'DP-H020', 2, 6, 'v2.0.8', 'INCREMENT', 'AUTO', 'SUCCESS', 'dev1', 'ops2', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 13 DAY), INTERVAL 36000 SECOND), DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 13 DAY), INTERVAL 36900 SECOND), DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 13 DAY), INTERVAL 38400 SECOND), '死信队列', '成功', NULL, 3),
+(21, 'DP-H021', 5, 1, 'v1.3.7', 'FULL', 'AUTO', 'FAILED', 'dev1', 'ops1', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 13 DAY), INTERVAL 61200 SECOND), DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 13 DAY), INTERVAL 62100 SECOND), DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 13 DAY), INTERVAL 63600 SECOND), '用户中心全量', '探活失败', NULL, 3),
+(22, 'DP-H022', 3, 3, 'v1.9.0', 'FULL', 'MANUAL', 'SUCCESS', 'dev2', 'ops2', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 12 DAY), INTERVAL 39600 SECOND), DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 12 DAY), INTERVAL 40500 SECOND), DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 12 DAY), INTERVAL 42000 SECOND), '门户改版', '成功', NULL, 3),
+(23, 'DP-H023', 4, 5, 'v1.5.1', 'INCREMENT', 'AUTO', 'SUCCESS', 'dev2', 'ops1', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 11 DAY), INTERVAL 32400 SECOND), DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 11 DAY), INTERVAL 33300 SECOND), DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 11 DAY), INTERVAL 34800 SECOND), '认证修复后重发', '成功', NULL, 3),
+(24, 'DP-H024', 1, 5, 'v2.2.2', 'INCREMENT', 'AUTO', 'FAILED', 'dev1', 'ops1', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 10 DAY), INTERVAL 50400 SECOND), DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 10 DAY), INTERVAL 51300 SECOND), DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 10 DAY), INTERVAL 52800 SECOND), '交易灰度', '上游超时', NULL, 3),
+(25, 'DP-H025', 1, 5, 'v2.2.1', 'ROLLBACK', 'AUTO', 'SUCCESS', 'ops1', 'ops2', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 10 DAY), INTERVAL 57600 SECOND), DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 10 DAY), INTERVAL 58500 SECOND), DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 10 DAY), INTERVAL 60000 SECOND), '灰度失败回滚', '回滚完成', 'v2.2.1', 3),
+(26, 'DP-H026', 2, 6, 'v2.0.9', 'INCREMENT', 'AUTO', 'SUCCESS', 'dev1', 'ops1', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 9 DAY), INTERVAL 36000 SECOND), DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 9 DAY), INTERVAL 36900 SECOND), DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 9 DAY), INTERVAL 38400 SECOND), '订单监控', '成功', NULL, 3),
+(27, 'DP-H027', 6, 3, 'v1.0.5', 'FULL', 'AUTO', 'SUCCESS', 'dev2', 'ops1', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 8 DAY), INTERVAL 54000 SECOND), DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 8 DAY), INTERVAL 54900 SECOND), DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 8 DAY), INTERVAL 56400 SECOND), '大屏全量', '成功', NULL, 3),
+(28, 'DP-H028', 5, 1, 'v1.3.8', 'INCREMENT', 'AUTO', 'FAILED', 'dev1', 'ops2', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 7 DAY), INTERVAL 32400 SECOND), DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 7 DAY), INTERVAL 33300 SECOND), DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 7 DAY), INTERVAL 34800 SECOND), '用户中心热更', '连接拒绝', NULL, 3),
+(29, 'DP-H029', 7, 1, 'v0.9.0', 'INCREMENT', 'AUTO', 'SUCCESS', 'dev1', 'ops1', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 7 DAY), INTERVAL 50400 SECOND), DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 7 DAY), INTERVAL 51300 SECOND), DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 7 DAY), INTERVAL 52800 SECOND), '网关中间版', '成功', NULL, 3),
+(30, 'DP-H030', 3, 3, 'v1.9.1', 'INCREMENT', 'MANUAL', 'SUCCESS', 'dev2', 'ops2', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 6 DAY), INTERVAL 39600 SECOND), DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 6 DAY), INTERVAL 40500 SECOND), DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 6 DAY), INTERVAL 42000 SECOND), '门户微调', '成功', NULL, 3),
+(31, 'DP-H031', 4, 5, 'v1.5.1', 'INCREMENT', 'AUTO', 'FAILED', 'dev2', 'ops1', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 5 DAY), INTERVAL 36000 SECOND), DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 5 DAY), INTERVAL 36900 SECOND), DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 5 DAY), INTERVAL 38400 SECOND), '认证压测包', '异常堆栈', NULL, 3),
+(32, 'DP-H032', 2, 6, 'v2.1.0', 'FULL', 'AUTO', 'SUCCESS', 'dev1', 'ops1', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 5 DAY), INTERVAL 57600 SECOND), DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 5 DAY), INTERVAL 58500 SECOND), DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 5 DAY), INTERVAL 60000 SECOND), '订单主版本', '成功', NULL, 3),
+(33, 'DP-H033', 1, 5, 'v2.3.0', 'FULL', 'AUTO', 'SUCCESS', 'dev1', 'ops1', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 4 DAY), INTERVAL 32400 SECOND), DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 4 DAY), INTERVAL 33300 SECOND), DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 4 DAY), INTERVAL 34800 SECOND), '交易预发', '成功', NULL, 3),
+(34, 'DP-H034', 8, 4, 'v0.0.9', 'FULL', 'AUTO', 'FAILED', 'dev2', 'ops2', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 4 DAY), INTERVAL 54000 SECOND), DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 4 DAY), INTERVAL 54900 SECOND), DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 4 DAY), INTERVAL 56400 SECOND), '探活重试', '权限 denied', NULL, 3),
+(35, 'DP-H035', 6, 3, 'v1.0.6', 'INCREMENT', 'AUTO', 'SUCCESS', 'dev2', 'ops1', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 3 DAY), INTERVAL 36000 SECOND), DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 3 DAY), INTERVAL 36900 SECOND), DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 3 DAY), INTERVAL 38400 SECOND), '经营指标', '成功', NULL, 3),
+(36, 'DP-H036', 5, 1, 'v1.3.9', 'FULL', 'AUTO', 'FAILED', 'dev1', 'ops1', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 3 DAY), INTERVAL 50400 SECOND), DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 3 DAY), INTERVAL 51300 SECOND), DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 3 DAY), INTERVAL 52800 SECOND), '用户中心配置热更新', 'TIMEOUT', NULL, 3),
+(37, 'DP-H037', 1, 5, 'v2.3.1', 'FULL', 'AUTO', 'SUCCESS', 'dev1', 'ops1', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 2 DAY), INTERVAL 32400 SECOND), DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 2 DAY), INTERVAL 33300 SECOND), DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 2 DAY), INTERVAL 34800 SECOND), '交易优惠券核销', '自动部署成功', NULL, 3),
+(38, 'DP-H038', 2, 6, 'v2.1.0', 'INCREMENT', 'AUTO', 'SUCCESS', 'dev1', 'ops1', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 2 DAY), INTERVAL 39600 SECOND), DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 2 DAY), INTERVAL 40500 SECOND), DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 2 DAY), INTERVAL 42000 SECOND), '订单超时关闭', '增量完成', NULL, 3),
+(39, 'DP-H039', 3, 3, 'v1.9.4', 'FULL', 'MANUAL', 'SUCCESS', 'dev2', 'ops2', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 2 DAY), INTERVAL 50400 SECOND), DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 2 DAY), INTERVAL 51300 SECOND), DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 2 DAY), INTERVAL 52800 SECOND), '门户首页改版', '手动标记成功', NULL, 3),
+(40, 'DP-H040', 4, 5, 'v1.5.2', 'INCREMENT', 'AUTO', 'FAILED', 'dev2', 'ops1', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 1 DAY), INTERVAL 32400 SECOND), DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 1 DAY), INTERVAL 33300 SECOND), DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 1 DAY), INTERVAL 34800 SECOND), '认证 JWT 升级', '缺少 jwt.secret', NULL, 3),
+(41, 'DP-H041', 1, 5, 'v2.3.0', 'ROLLBACK', 'AUTO', 'SUCCESS', 'ops1', 'ops2', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 1 DAY), INTERVAL 39600 SECOND), DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 1 DAY), INTERVAL 40500 SECOND), DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 1 DAY), INTERVAL 42000 SECOND), '下单失败率升高回滚', '回滚完成', 'v2.3.0', 3),
+(42, 'DP-L042', 5, 1, 'v1.4.0', 'FULL', 'AUTO', 'REJECTED', 'dev1', 'ops2', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 1 DAY), INTERVAL 54000 SECOND), DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 1 DAY), INTERVAL 54900 SECOND), NULL, '用户中心提测部署', '驳回：缺少 DDL 与回滚方案', NULL, 2),
+(43, 'DP-L043', 7, 1, 'v0.9.1', 'FULL', 'AUTO', 'DEPLOYING', 'dev1', 'ops1', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 0 DAY), INTERVAL 32400 SECOND), DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 0 DAY), INTERVAL 33300 SECOND), NULL, '移动网关开发环境首发', '自动部署执行中', NULL, 2),
+(44, 'DP-L044', 6, 3, 'v1.0.7', 'INCREMENT', 'MANUAL', 'APPROVED', 'dev2', 'ops1', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 0 DAY), INTERVAL 36000 SECOND), DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 0 DAY), INTERVAL 36900 SECOND), NULL, '大屏新增经营指标', '已批准，等待晚间窗口', NULL, 2),
+(45, 'DP-L045', 8, 4, 'v0.1.0', 'FULL', 'AUTO', 'PENDING', 'dev2', NULL, DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 0 DAY), INTERVAL 32400 SECOND), NULL, NULL, '探活采集初版验证', '等待运维审批', NULL, 0),
+(46, 'DP-L046', 2, 6, 'v2.1.1', 'INCREMENT', 'AUTO', 'PENDING', 'dev1', NULL, DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 0 DAY), INTERVAL 36000 SECOND), NULL, NULL, '订单金额精度修复', '等待运维审批', NULL, 0),
+(47, 'DP-L047', 3, 3, 'v1.9.5', 'INCREMENT', 'MANUAL', 'DEPLOYING', 'dev2', 'ops2', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 0 DAY), INTERVAL 57600 SECOND), DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 0 DAY), INTERVAL 58500 SECOND), NULL, '门户热修文案', '已进入手动部署', NULL, 2);
 
 -- ----------------------------
--- 8. 告警记录（12条，INFO / WARNING / CRITICAL 三级与三种状态均有，resolve_time 与 handle_time 存在时间差）
+-- 部署执行记录
 -- ----------------------------
-INSERT INTO `alarm` (`id`, `alarm_no`, `app_id`, `server_id`, `level`, `content`, `status`, `handler`, `handle_time`, `resolve_time`) VALUES
-(1, 'AL-20250901-001', 1, 5, 'CRITICAL', '交易服务 CPU 使用率持续 5 分钟超过 95%，请求排队严重', 'RESOLVED', 'ops1', '2025-09-01 08:15:00', '2025-09-01 08:52:00'),
-(2, 'AL-20250902-002', 2, 6, 'WARNING', '订单服务 JVM 老年代内存使用率达到 82%，存在 FullGC 风险', 'RESOLVED', 'ops1', '2025-09-02 10:20:00', '2025-09-02 11:05:00'),
-(3, 'AL-20250903-003', 3, 3, 'INFO', '前端门户 Nginx 配置已重新加载，新增 gzip 压缩规则生效', 'RESOLVED', 'ops2', '2025-09-03 14:30:00', '2025-09-03 14:35:00'),
-(4, 'AL-20250905-004', 4, 5, 'CRITICAL', '统一认证服务健康检查连续 3 次失败，接口 5xx 比例达到 37%', 'RESOLVED', 'ops2', '2025-09-05 09:05:00', '2025-09-05 10:12:00'),
-(5, 'AL-20250908-005', 4, 5, 'WARNING', '统一认证服务接口平均响应时间上升至 1200ms，超过 800ms 阈值', 'HANDLING', 'ops1', '2025-09-08 09:40:00', NULL),
-(6, 'AL-20250909-006', 1, 5, 'CRITICAL', '交易服务数据库连接池耗尽，等待获取连接的线程数达到 48', 'HANDLING', 'ops1', '2025-09-09 11:10:00', NULL),
-(7, 'AL-20250910-007', 5, 1, 'INFO', '用户中心服务已按计划下线，进入停机维护窗口', 'RESOLVED', 'ops2', '2025-09-10 18:00:00', '2025-09-10 18:03:00'),
-(8, 'AL-20250911-008', 6, 3, 'WARNING', '数据大屏服务所在磁盘使用率达到 85%，请及时清理历史日志', 'HANDLING', 'ops2', '2025-09-11 10:15:00', NULL),
-(9, 'AL-20250912-009', 7, 2, 'INFO', '移动端网关已完成灰度流量切换，当前灰度比例 10%', 'UNHANDLED', NULL, NULL, NULL),
-(10, 'AL-20250912-010', 8, 4, 'WARNING', '监控采集服务采集任务积压 1200 条，消费速度低于生产速度', 'UNHANDLED', NULL, NULL, NULL),
-(11, 'AL-20250913-011', 2, 6, 'CRITICAL', '订单服务节点心跳丢失，实例已被注册中心自动摘除', 'UNHANDLED', NULL, NULL, NULL),
-(12, 'AL-20250913-012', 6, 3, 'INFO', '数据大屏服务定时任务执行完成，本次耗时 42s', 'UNHANDLED', NULL, NULL, NULL);
+INSERT INTO `deploy_execution` (`id`, `deploy_id`, `status`, `exit_code`, `retry_count`, `start_time`, `end_time`, `error_message`) VALUES
+(1, 1, 'SUCCESS', 0, 0, DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 28 DAY), INTERVAL 36960 SECOND), DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 28 DAY), INTERVAL 38340 SECOND), NULL),
+(2, 2, 'SUCCESS', 0, 0, DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 27 DAY), INTERVAL 51360 SECOND), DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 27 DAY), INTERVAL 52740 SECOND), NULL),
+(3, 3, 'SUCCESS', 0, 0, DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 26 DAY), INTERVAL 33360 SECOND), DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 26 DAY), INTERVAL 34740 SECOND), NULL),
+(4, 4, 'FAILED', 1, 1, DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 25 DAY), INTERVAL 40560 SECOND), DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 25 DAY), INTERVAL 41940 SECOND), '[auto] ERROR: jwt.secret missing / health check error'),
+(5, 5, 'SUCCESS', 0, 0, DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 25 DAY), INTERVAL 58560 SECOND), DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 25 DAY), INTERVAL 59940 SECOND), NULL),
+(6, 6, 'SUCCESS', 0, 0, DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 24 DAY), INTERVAL 36960 SECOND), DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 24 DAY), INTERVAL 38340 SECOND), NULL),
+(7, 7, 'FAILED', 1, 1, DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 23 DAY), INTERVAL 54960 SECOND), DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 23 DAY), INTERVAL 56340 SECOND), '[auto] connection refused by app port 8084'),
+(8, 8, 'SUCCESS', 0, 0, DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 22 DAY), INTERVAL 33360 SECOND), DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 22 DAY), INTERVAL 34740 SECOND), NULL),
+(9, 9, 'FAILED', 1, 1, DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 22 DAY), INTERVAL 65760 SECOND), DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 22 DAY), INTERVAL 67140 SECOND), '[auto] Uncaught exception: NullPointerException in AuthFilter'),
+(10, 10, 'SUCCESS', 0, 0, DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 21 DAY), INTERVAL 40560 SECOND), DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 21 DAY), INTERVAL 41940 SECOND), NULL),
+(11, 11, 'SUCCESS', 0, 0, DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 20 DAY), INTERVAL 36960 SECOND), DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 20 DAY), INTERVAL 38340 SECOND), NULL),
+(12, 12, 'SUCCESS', 0, 0, DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 19 DAY), INTERVAL 51360 SECOND), DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 19 DAY), INTERVAL 52740 SECOND), NULL),
+(13, 13, 'FAILED', 1, 1, DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 18 DAY), INTERVAL 33360 SECOND), DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 18 DAY), INTERVAL 34740 SECOND), '[auto] gateway timeout while calling upstream / exceed max-timeout'),
+(14, 14, 'SUCCESS', 0, 0, DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 18 DAY), INTERVAL 54960 SECOND), DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 18 DAY), INTERVAL 56340 SECOND), NULL),
+(15, 15, 'SUCCESS', 0, 0, DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 17 DAY), INTERVAL 40560 SECOND), DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 17 DAY), INTERVAL 41940 SECOND), NULL),
+(16, 16, 'FAILED', 1, 1, DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 16 DAY), INTERVAL 36960 SECOND), DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 16 DAY), INTERVAL 38340 SECOND), '[auto] deploy failed: health check returned non-200'),
+(17, 17, 'SUCCESS', 0, 0, DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 16 DAY), INTERVAL 58560 SECOND), DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 16 DAY), INTERVAL 59940 SECOND), NULL),
+(18, 18, 'FAILED', 1, 1, DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 15 DAY), INTERVAL 33360 SECOND), DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 15 DAY), INTERVAL 34740 SECOND), '[auto] Permission denied writing /opt/apps/releases'),
+(19, 19, 'SUCCESS', 0, 0, DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 14 DAY), INTERVAL 47760 SECOND), DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 14 DAY), INTERVAL 49140 SECOND), NULL),
+(20, 20, 'SUCCESS', 0, 0, DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 13 DAY), INTERVAL 36960 SECOND), DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 13 DAY), INTERVAL 38340 SECOND), NULL),
+(21, 21, 'FAILED', 1, 1, DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 13 DAY), INTERVAL 62160 SECOND), DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 13 DAY), INTERVAL 63540 SECOND), '[auto] ERROR: jwt.secret missing / health check error'),
+(22, 22, 'SUCCESS', 0, 0, DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 12 DAY), INTERVAL 40560 SECOND), DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 12 DAY), INTERVAL 41940 SECOND), NULL),
+(23, 23, 'SUCCESS', 0, 0, DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 11 DAY), INTERVAL 33360 SECOND), DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 11 DAY), INTERVAL 34740 SECOND), NULL),
+(24, 24, 'FAILED', 1, 1, DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 10 DAY), INTERVAL 51360 SECOND), DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 10 DAY), INTERVAL 52740 SECOND), '[auto] gateway timeout while calling upstream / exceed max-timeout'),
+(25, 25, 'SUCCESS', 0, 0, DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 10 DAY), INTERVAL 58560 SECOND), DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 10 DAY), INTERVAL 59940 SECOND), NULL),
+(26, 26, 'SUCCESS', 0, 0, DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 9 DAY), INTERVAL 36960 SECOND), DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 9 DAY), INTERVAL 38340 SECOND), NULL),
+(27, 27, 'SUCCESS', 0, 0, DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 8 DAY), INTERVAL 54960 SECOND), DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 8 DAY), INTERVAL 56340 SECOND), NULL),
+(28, 28, 'FAILED', 1, 1, DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 7 DAY), INTERVAL 33360 SECOND), DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 7 DAY), INTERVAL 34740 SECOND), '[auto] connection refused by app port 8084'),
+(29, 29, 'SUCCESS', 0, 0, DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 7 DAY), INTERVAL 51360 SECOND), DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 7 DAY), INTERVAL 52740 SECOND), NULL),
+(30, 30, 'SUCCESS', 0, 0, DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 6 DAY), INTERVAL 40560 SECOND), DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 6 DAY), INTERVAL 41940 SECOND), NULL),
+(31, 31, 'FAILED', 1, 1, DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 5 DAY), INTERVAL 36960 SECOND), DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 5 DAY), INTERVAL 38340 SECOND), '[auto] Uncaught exception: NullPointerException in AuthFilter'),
+(32, 32, 'SUCCESS', 0, 0, DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 5 DAY), INTERVAL 58560 SECOND), DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 5 DAY), INTERVAL 59940 SECOND), NULL),
+(33, 33, 'SUCCESS', 0, 0, DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 4 DAY), INTERVAL 33360 SECOND), DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 4 DAY), INTERVAL 34740 SECOND), NULL),
+(34, 34, 'FAILED', 1, 1, DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 4 DAY), INTERVAL 54960 SECOND), DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 4 DAY), INTERVAL 56340 SECOND), '[auto] Permission denied writing /opt/apps/releases'),
+(35, 35, 'SUCCESS', 0, 0, DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 3 DAY), INTERVAL 36960 SECOND), DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 3 DAY), INTERVAL 38340 SECOND), NULL),
+(36, 36, 'FAILED', 1, 1, DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 3 DAY), INTERVAL 51360 SECOND), DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 3 DAY), INTERVAL 52740 SECOND), '[auto] gateway timeout while calling upstream / exceed max-timeout'),
+(37, 37, 'SUCCESS', 0, 0, DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 2 DAY), INTERVAL 33360 SECOND), DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 2 DAY), INTERVAL 34740 SECOND), NULL),
+(38, 38, 'SUCCESS', 0, 0, DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 2 DAY), INTERVAL 40560 SECOND), DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 2 DAY), INTERVAL 41940 SECOND), NULL),
+(39, 39, 'SUCCESS', 0, 0, DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 2 DAY), INTERVAL 51360 SECOND), DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 2 DAY), INTERVAL 52740 SECOND), NULL),
+(40, 40, 'FAILED', 1, 1, DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 1 DAY), INTERVAL 33360 SECOND), DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 1 DAY), INTERVAL 34740 SECOND), '[auto] ERROR: jwt.secret missing / health check error'),
+(41, 41, 'SUCCESS', 0, 0, DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 1 DAY), INTERVAL 40560 SECOND), DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 1 DAY), INTERVAL 41940 SECOND), NULL),
+(42, 43, 'RUNNING', NULL, 0, DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 0 DAY), INTERVAL 33360 SECOND), NULL, NULL),
+(43, 47, 'RUNNING', NULL, 0, DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 0 DAY), INTERVAL 58560 SECOND), NULL, NULL);
+
+-- ----------------------------
+-- 流转日志 + EXEC（关键字覆盖 error/exception/failed/timeout/denied/refused）
+-- ----------------------------
+INSERT INTO `deploy_log` (`id`, `deploy_id`, `action`, `operator`, `detail`, `log_type`, `seq`, `source`, `create_time`) VALUES
+(1, 1, 'APPLY', 'dev1', '提交 交易服务周版本', 'STATE', 0, 'MANUAL', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 28 DAY), INTERVAL 36000 SECOND)),
+(2, 1, 'APPROVE', 'ops1', '审批通过', 'STATE', 0, 'MANUAL', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 28 DAY), INTERVAL 36900 SECOND)),
+(3, 1, 'START_DEPLOY', 'ops1', '开始部署 executeMode=AUTO', 'STATE', 0, 'MANUAL', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 28 DAY), INTERVAL 37200 SECOND)),
+(4, 1, 'FINISH', 'ops1', '探活通过', 'STATE', 0, 'AUTO', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 28 DAY), INTERVAL 38400 SECOND)),
+(5, 1, 'EXEC', 'system', '[auto] deploy ok md5 verified', 'EXEC', 1, 'AUTO', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 28 DAY), INTERVAL 38400 SECOND)),
+(6, 2, 'APPLY', 'dev1', '提交 订单超时修复', 'STATE', 0, 'MANUAL', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 27 DAY), INTERVAL 50400 SECOND)),
+(7, 2, 'APPROVE', 'ops1', '审批通过', 'STATE', 0, 'MANUAL', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 27 DAY), INTERVAL 51300 SECOND)),
+(8, 2, 'START_DEPLOY', 'ops1', '开始部署 executeMode=AUTO', 'STATE', 0, 'MANUAL', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 27 DAY), INTERVAL 51600 SECOND)),
+(9, 2, 'FINISH', 'ops1', '成功', 'STATE', 0, 'AUTO', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 27 DAY), INTERVAL 52800 SECOND)),
+(10, 2, 'EXEC', 'system', '[auto] deploy ok md5 verified', 'EXEC', 1, 'AUTO', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 27 DAY), INTERVAL 52800 SECOND)),
+(11, 3, 'APPLY', 'dev2', '提交 门户静态资源', 'STATE', 0, 'MANUAL', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 26 DAY), INTERVAL 32400 SECOND)),
+(12, 3, 'APPROVE', 'ops2', '审批通过', 'STATE', 0, 'MANUAL', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 26 DAY), INTERVAL 33300 SECOND)),
+(13, 3, 'START_DEPLOY', 'ops2', '开始部署 executeMode=MANUAL', 'STATE', 0, 'MANUAL', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 26 DAY), INTERVAL 33600 SECOND)),
+(14, 3, 'FINISH', 'ops2', '手动完成', 'STATE', 0, 'AUTO', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 26 DAY), INTERVAL 34800 SECOND)),
+(15, 3, 'EXEC', 'system', '[auto] deploy ok md5 verified', 'EXEC', 1, 'AUTO', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 26 DAY), INTERVAL 34800 SECOND)),
+(16, 4, 'APPLY', 'dev2', '提交 认证热更', 'STATE', 0, 'MANUAL', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 25 DAY), INTERVAL 39600 SECOND)),
+(17, 4, 'APPROVE', 'ops1', '审批通过', 'STATE', 0, 'MANUAL', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 25 DAY), INTERVAL 40500 SECOND)),
+(18, 4, 'START_DEPLOY', 'ops1', '开始部署 executeMode=AUTO', 'STATE', 0, 'MANUAL', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 25 DAY), INTERVAL 40800 SECOND)),
+(19, 4, 'FAIL', 'ops1', '密钥缺失', 'STATE', 0, 'AUTO', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 25 DAY), INTERVAL 42000 SECOND)),
+(20, 4, 'EXEC', 'system', '[auto] ERROR: jwt.secret missing / health check error', 'EXEC', 1, 'AUTO', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 25 DAY), INTERVAL 42000 SECOND)),
+(21, 4, 'EXEC', 'system', '[auto] exit_code=1 retry failed', 'EXEC', 2, 'AUTO', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 25 DAY), INTERVAL 42000 SECOND)),
+(22, 5, 'APPLY', 'dev1', '提交 优惠券补丁', 'STATE', 0, 'MANUAL', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 25 DAY), INTERVAL 57600 SECOND)),
+(23, 5, 'APPROVE', 'ops1', '审批通过', 'STATE', 0, 'MANUAL', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 25 DAY), INTERVAL 58500 SECOND)),
+(24, 5, 'START_DEPLOY', 'ops1', '开始部署 executeMode=AUTO', 'STATE', 0, 'MANUAL', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 25 DAY), INTERVAL 58800 SECOND)),
+(25, 5, 'FINISH', 'ops1', '成功', 'STATE', 0, 'AUTO', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 25 DAY), INTERVAL 60000 SECOND)),
+(26, 5, 'EXEC', 'system', '[auto] deploy ok md5 verified', 'EXEC', 1, 'AUTO', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 25 DAY), INTERVAL 60000 SECOND)),
+(27, 6, 'APPLY', 'dev2', '提交 大屏指标', 'STATE', 0, 'MANUAL', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 24 DAY), INTERVAL 36000 SECOND)),
+(28, 6, 'APPROVE', 'ops1', '审批通过', 'STATE', 0, 'MANUAL', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 24 DAY), INTERVAL 36900 SECOND)),
+(29, 6, 'START_DEPLOY', 'ops1', '开始部署 executeMode=AUTO', 'STATE', 0, 'MANUAL', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 24 DAY), INTERVAL 37200 SECOND)),
+(30, 6, 'FINISH', 'ops1', '成功', 'STATE', 0, 'AUTO', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 24 DAY), INTERVAL 38400 SECOND)),
+(31, 6, 'EXEC', 'system', '[auto] deploy ok md5 verified', 'EXEC', 1, 'AUTO', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 24 DAY), INTERVAL 38400 SECOND)),
+(32, 7, 'APPLY', 'dev1', '提交 用户中心提测', 'STATE', 0, 'MANUAL', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 23 DAY), INTERVAL 54000 SECOND)),
+(33, 7, 'APPROVE', 'ops2', '审批通过', 'STATE', 0, 'MANUAL', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 23 DAY), INTERVAL 54900 SECOND)),
+(34, 7, 'START_DEPLOY', 'ops2', '开始部署 executeMode=AUTO', 'STATE', 0, 'MANUAL', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 23 DAY), INTERVAL 55200 SECOND)),
+(35, 7, 'FAIL', 'ops2', '连接被拒', 'STATE', 0, 'AUTO', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 23 DAY), INTERVAL 56400 SECOND)),
+(36, 7, 'EXEC', 'system', '[auto] connection refused by app port 8084', 'EXEC', 1, 'AUTO', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 23 DAY), INTERVAL 56400 SECOND)),
+(37, 8, 'APPLY', 'dev1', '提交 金额精度', 'STATE', 0, 'MANUAL', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 22 DAY), INTERVAL 32400 SECOND)),
+(38, 8, 'APPROVE', 'ops1', '审批通过', 'STATE', 0, 'MANUAL', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 22 DAY), INTERVAL 33300 SECOND)),
+(39, 8, 'START_DEPLOY', 'ops1', '开始部署 executeMode=AUTO', 'STATE', 0, 'MANUAL', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 22 DAY), INTERVAL 33600 SECOND)),
+(40, 8, 'FINISH', 'ops1', '成功', 'STATE', 0, 'AUTO', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 22 DAY), INTERVAL 34800 SECOND)),
+(41, 8, 'EXEC', 'system', '[auto] deploy ok md5 verified', 'EXEC', 1, 'AUTO', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 22 DAY), INTERVAL 34800 SECOND)),
+(42, 9, 'APPLY', 'dev2', '提交 认证全量', 'STATE', 0, 'MANUAL', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 22 DAY), INTERVAL 64800 SECOND)),
+(43, 9, 'APPROVE', 'ops1', '审批通过', 'STATE', 0, 'MANUAL', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 22 DAY), INTERVAL 65700 SECOND)),
+(44, 9, 'START_DEPLOY', 'ops1', '开始部署 executeMode=AUTO', 'STATE', 0, 'MANUAL', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 22 DAY), INTERVAL 66000 SECOND)),
+(45, 9, 'FAIL', 'ops1', '启动异常', 'STATE', 0, 'AUTO', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 22 DAY), INTERVAL 67200 SECOND)),
+(46, 9, 'EXEC', 'system', '[auto] Uncaught exception: NullPointerException in AuthFilter', 'EXEC', 1, 'AUTO', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 22 DAY), INTERVAL 67200 SECOND)),
+(47, 9, 'EXEC', 'system', '[auto] nested exception is BindException', 'EXEC', 2, 'AUTO', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 22 DAY), INTERVAL 67200 SECOND)),
+(48, 10, 'APPLY', 'dev1', '提交 从节点同步', 'STATE', 0, 'MANUAL', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 21 DAY), INTERVAL 39600 SECOND)),
+(49, 10, 'APPROVE', 'ops2', '审批通过', 'STATE', 0, 'MANUAL', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 21 DAY), INTERVAL 40500 SECOND)),
+(50, 10, 'START_DEPLOY', 'ops2', '开始部署 executeMode=AUTO', 'STATE', 0, 'MANUAL', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 21 DAY), INTERVAL 40800 SECOND)),
+(51, 10, 'FINISH', 'ops2', '成功', 'STATE', 0, 'AUTO', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 21 DAY), INTERVAL 42000 SECOND)),
+(52, 10, 'EXEC', 'system', '[auto] deploy ok md5 verified', 'EXEC', 1, 'AUTO', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 21 DAY), INTERVAL 42000 SECOND)),
+(53, 11, 'APPLY', 'dev1', '提交 网关开发环境', 'STATE', 0, 'MANUAL', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 20 DAY), INTERVAL 36000 SECOND)),
+(54, 11, 'APPROVE', 'ops1', '审批通过', 'STATE', 0, 'MANUAL', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 20 DAY), INTERVAL 36900 SECOND)),
+(55, 11, 'START_DEPLOY', 'ops1', '开始部署 executeMode=AUTO', 'STATE', 0, 'MANUAL', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 20 DAY), INTERVAL 37200 SECOND)),
+(56, 11, 'FINISH', 'ops1', '成功', 'STATE', 0, 'AUTO', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 20 DAY), INTERVAL 38400 SECOND)),
+(57, 11, 'EXEC', 'system', '[auto] deploy ok md5 verified', 'EXEC', 1, 'AUTO', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 20 DAY), INTERVAL 38400 SECOND)),
+(58, 12, 'APPLY', 'dev2', '提交 文案热修', 'STATE', 0, 'MANUAL', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 19 DAY), INTERVAL 50400 SECOND)),
+(59, 12, 'APPROVE', 'ops2', '审批通过', 'STATE', 0, 'MANUAL', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 19 DAY), INTERVAL 51300 SECOND)),
+(60, 12, 'START_DEPLOY', 'ops2', '开始部署 executeMode=MANUAL', 'STATE', 0, 'MANUAL', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 19 DAY), INTERVAL 51600 SECOND)),
+(61, 12, 'FINISH', 'ops2', '成功', 'STATE', 0, 'AUTO', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 19 DAY), INTERVAL 52800 SECOND)),
+(62, 12, 'EXEC', 'system', '[auto] deploy ok md5 verified', 'EXEC', 1, 'AUTO', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 19 DAY), INTERVAL 52800 SECOND)),
+(63, 13, 'APPLY', 'dev1', '提交 用户中心配置', 'STATE', 0, 'MANUAL', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 18 DAY), INTERVAL 32400 SECOND)),
+(64, 13, 'APPROVE', 'ops1', '审批通过', 'STATE', 0, 'MANUAL', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 18 DAY), INTERVAL 33300 SECOND)),
+(65, 13, 'START_DEPLOY', 'ops1', '开始部署 executeMode=AUTO', 'STATE', 0, 'MANUAL', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 18 DAY), INTERVAL 33600 SECOND)),
+(66, 13, 'FAIL', 'ops1', '执行超时', 'STATE', 0, 'AUTO', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 18 DAY), INTERVAL 34800 SECOND)),
+(67, 13, 'EXEC', 'system', '[auto] gateway timeout while calling upstream / exceed max-timeout', 'EXEC', 1, 'AUTO', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 18 DAY), INTERVAL 34800 SECOND)),
+(68, 13, 'EXEC', 'system', '[auto] health check timeout after 60s', 'EXEC', 2, 'AUTO', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 18 DAY), INTERVAL 34800 SECOND)),
+(69, 14, 'APPLY', 'dev1', '提交 订单全量', 'STATE', 0, 'MANUAL', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 18 DAY), INTERVAL 54000 SECOND)),
+(70, 14, 'APPROVE', 'ops1', '审批通过', 'STATE', 0, 'MANUAL', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 18 DAY), INTERVAL 54900 SECOND)),
+(71, 14, 'START_DEPLOY', 'ops1', '开始部署 executeMode=AUTO', 'STATE', 0, 'MANUAL', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 18 DAY), INTERVAL 55200 SECOND)),
+(72, 14, 'FINISH', 'ops1', '成功', 'STATE', 0, 'AUTO', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 18 DAY), INTERVAL 56400 SECOND)),
+(73, 14, 'EXEC', 'system', '[auto] deploy ok md5 verified', 'EXEC', 1, 'AUTO', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 18 DAY), INTERVAL 56400 SECOND)),
+(74, 15, 'APPLY', 'dev1', '提交 交易大版本', 'STATE', 0, 'MANUAL', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 17 DAY), INTERVAL 39600 SECOND)),
+(75, 15, 'APPROVE', 'ops1', '审批通过', 'STATE', 0, 'MANUAL', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 17 DAY), INTERVAL 40500 SECOND)),
+(76, 15, 'START_DEPLOY', 'ops1', '开始部署 executeMode=AUTO', 'STATE', 0, 'MANUAL', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 17 DAY), INTERVAL 40800 SECOND)),
+(77, 15, 'FINISH', 'ops1', '成功', 'STATE', 0, 'AUTO', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 17 DAY), INTERVAL 42000 SECOND)),
+(78, 15, 'EXEC', 'system', '[auto] deploy ok md5 verified', 'EXEC', 1, 'AUTO', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 17 DAY), INTERVAL 42000 SECOND)),
+(79, 16, 'APPLY', 'dev2', '提交 JWT 算法切换', 'STATE', 0, 'MANUAL', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 16 DAY), INTERVAL 36000 SECOND)),
+(80, 16, 'APPROVE', 'ops2', '审批通过', 'STATE', 0, 'MANUAL', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 16 DAY), INTERVAL 36900 SECOND)),
+(81, 16, 'START_DEPLOY', 'ops2', '开始部署 executeMode=AUTO', 'STATE', 0, 'MANUAL', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 16 DAY), INTERVAL 37200 SECOND)),
+(82, 16, 'FAIL', 'ops2', '鉴权失败', 'STATE', 0, 'AUTO', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 16 DAY), INTERVAL 38400 SECOND)),
+(83, 16, 'EXEC', 'system', '[auto] deploy failed: health check returned non-200', 'EXEC', 1, 'AUTO', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 16 DAY), INTERVAL 38400 SECOND)),
+(84, 17, 'APPLY', 'dev2', '提交 大屏缓存', 'STATE', 0, 'MANUAL', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 16 DAY), INTERVAL 57600 SECOND)),
+(85, 17, 'APPROVE', 'ops1', '审批通过', 'STATE', 0, 'MANUAL', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 16 DAY), INTERVAL 58500 SECOND)),
+(86, 17, 'START_DEPLOY', 'ops1', '开始部署 executeMode=AUTO', 'STATE', 0, 'MANUAL', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 16 DAY), INTERVAL 58800 SECOND)),
+(87, 17, 'FINISH', 'ops1', '成功', 'STATE', 0, 'AUTO', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 16 DAY), INTERVAL 60000 SECOND)),
+(88, 17, 'EXEC', 'system', '[auto] deploy ok md5 verified', 'EXEC', 1, 'AUTO', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 16 DAY), INTERVAL 60000 SECOND)),
+(89, 18, 'APPLY', 'dev2', '提交 探活初装', 'STATE', 0, 'MANUAL', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 15 DAY), INTERVAL 32400 SECOND)),
+(90, 18, 'APPROVE', 'ops1', '审批通过', 'STATE', 0, 'MANUAL', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 15 DAY), INTERVAL 33300 SECOND)),
+(91, 18, 'START_DEPLOY', 'ops1', '开始部署 executeMode=AUTO', 'STATE', 0, 'MANUAL', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 15 DAY), INTERVAL 33600 SECOND)),
+(92, 18, 'FAIL', 'ops1', '权限拒绝', 'STATE', 0, 'AUTO', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 15 DAY), INTERVAL 34800 SECOND)),
+(93, 18, 'EXEC', 'system', '[auto] Permission denied writing /opt/apps/releases', 'EXEC', 1, 'AUTO', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 15 DAY), INTERVAL 34800 SECOND)),
+(94, 19, 'APPLY', 'dev1', '提交 交易补丁', 'STATE', 0, 'MANUAL', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 14 DAY), INTERVAL 46800 SECOND)),
+(95, 19, 'APPROVE', 'ops1', '审批通过', 'STATE', 0, 'MANUAL', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 14 DAY), INTERVAL 47700 SECOND)),
+(96, 19, 'START_DEPLOY', 'ops1', '开始部署 executeMode=AUTO', 'STATE', 0, 'MANUAL', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 14 DAY), INTERVAL 48000 SECOND)),
+(97, 19, 'FINISH', 'ops1', '成功', 'STATE', 0, 'AUTO', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 14 DAY), INTERVAL 49200 SECOND)),
+(98, 19, 'EXEC', 'system', '[auto] deploy ok md5 verified', 'EXEC', 1, 'AUTO', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 14 DAY), INTERVAL 49200 SECOND)),
+(99, 20, 'APPLY', 'dev1', '提交 死信队列', 'STATE', 0, 'MANUAL', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 13 DAY), INTERVAL 36000 SECOND)),
+(100, 20, 'APPROVE', 'ops2', '审批通过', 'STATE', 0, 'MANUAL', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 13 DAY), INTERVAL 36900 SECOND)),
+(101, 20, 'START_DEPLOY', 'ops2', '开始部署 executeMode=AUTO', 'STATE', 0, 'MANUAL', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 13 DAY), INTERVAL 37200 SECOND)),
+(102, 20, 'FINISH', 'ops2', '成功', 'STATE', 0, 'AUTO', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 13 DAY), INTERVAL 38400 SECOND)),
+(103, 20, 'EXEC', 'system', '[auto] deploy ok md5 verified', 'EXEC', 1, 'AUTO', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 13 DAY), INTERVAL 38400 SECOND)),
+(104, 21, 'APPLY', 'dev1', '提交 用户中心全量', 'STATE', 0, 'MANUAL', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 13 DAY), INTERVAL 61200 SECOND)),
+(105, 21, 'APPROVE', 'ops1', '审批通过', 'STATE', 0, 'MANUAL', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 13 DAY), INTERVAL 62100 SECOND)),
+(106, 21, 'START_DEPLOY', 'ops1', '开始部署 executeMode=AUTO', 'STATE', 0, 'MANUAL', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 13 DAY), INTERVAL 62400 SECOND)),
+(107, 21, 'FAIL', 'ops1', '探活失败', 'STATE', 0, 'AUTO', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 13 DAY), INTERVAL 63600 SECOND)),
+(108, 21, 'EXEC', 'system', '[auto] ERROR: jwt.secret missing / health check error', 'EXEC', 1, 'AUTO', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 13 DAY), INTERVAL 63600 SECOND)),
+(109, 21, 'EXEC', 'system', '[auto] exit_code=1 retry failed', 'EXEC', 2, 'AUTO', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 13 DAY), INTERVAL 63600 SECOND)),
+(110, 22, 'APPLY', 'dev2', '提交 门户改版', 'STATE', 0, 'MANUAL', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 12 DAY), INTERVAL 39600 SECOND)),
+(111, 22, 'APPROVE', 'ops2', '审批通过', 'STATE', 0, 'MANUAL', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 12 DAY), INTERVAL 40500 SECOND)),
+(112, 22, 'START_DEPLOY', 'ops2', '开始部署 executeMode=MANUAL', 'STATE', 0, 'MANUAL', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 12 DAY), INTERVAL 40800 SECOND)),
+(113, 22, 'FINISH', 'ops2', '成功', 'STATE', 0, 'AUTO', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 12 DAY), INTERVAL 42000 SECOND)),
+(114, 22, 'EXEC', 'system', '[auto] deploy ok md5 verified', 'EXEC', 1, 'AUTO', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 12 DAY), INTERVAL 42000 SECOND)),
+(115, 23, 'APPLY', 'dev2', '提交 认证修复后重发', 'STATE', 0, 'MANUAL', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 11 DAY), INTERVAL 32400 SECOND)),
+(116, 23, 'APPROVE', 'ops1', '审批通过', 'STATE', 0, 'MANUAL', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 11 DAY), INTERVAL 33300 SECOND)),
+(117, 23, 'START_DEPLOY', 'ops1', '开始部署 executeMode=AUTO', 'STATE', 0, 'MANUAL', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 11 DAY), INTERVAL 33600 SECOND)),
+(118, 23, 'FINISH', 'ops1', '成功', 'STATE', 0, 'AUTO', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 11 DAY), INTERVAL 34800 SECOND)),
+(119, 23, 'EXEC', 'system', '[auto] deploy ok md5 verified', 'EXEC', 1, 'AUTO', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 11 DAY), INTERVAL 34800 SECOND)),
+(120, 24, 'APPLY', 'dev1', '提交 交易灰度', 'STATE', 0, 'MANUAL', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 10 DAY), INTERVAL 50400 SECOND)),
+(121, 24, 'APPROVE', 'ops1', '审批通过', 'STATE', 0, 'MANUAL', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 10 DAY), INTERVAL 51300 SECOND)),
+(122, 24, 'START_DEPLOY', 'ops1', '开始部署 executeMode=AUTO', 'STATE', 0, 'MANUAL', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 10 DAY), INTERVAL 51600 SECOND)),
+(123, 24, 'FAIL', 'ops1', '上游超时', 'STATE', 0, 'AUTO', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 10 DAY), INTERVAL 52800 SECOND)),
+(124, 24, 'EXEC', 'system', '[auto] gateway timeout while calling upstream / exceed max-timeout', 'EXEC', 1, 'AUTO', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 10 DAY), INTERVAL 52800 SECOND)),
+(125, 24, 'EXEC', 'system', '[auto] health check timeout after 60s', 'EXEC', 2, 'AUTO', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 10 DAY), INTERVAL 52800 SECOND)),
+(126, 25, 'APPLY', 'ops1', '提交 灰度失败回滚', 'STATE', 0, 'MANUAL', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 10 DAY), INTERVAL 57600 SECOND)),
+(127, 25, 'APPROVE', 'ops2', '审批通过', 'STATE', 0, 'MANUAL', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 10 DAY), INTERVAL 58500 SECOND)),
+(128, 25, 'START_DEPLOY', 'ops2', '开始部署 executeMode=AUTO', 'STATE', 0, 'MANUAL', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 10 DAY), INTERVAL 58800 SECOND)),
+(129, 25, 'ROLLBACK', 'ops2', '回滚完成', 'STATE', 0, 'AUTO', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 10 DAY), INTERVAL 60000 SECOND)),
+(130, 25, 'EXEC', 'system', '[auto] deploy ok md5 verified', 'EXEC', 1, 'AUTO', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 10 DAY), INTERVAL 60000 SECOND)),
+(131, 26, 'APPLY', 'dev1', '提交 订单监控', 'STATE', 0, 'MANUAL', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 9 DAY), INTERVAL 36000 SECOND)),
+(132, 26, 'APPROVE', 'ops1', '审批通过', 'STATE', 0, 'MANUAL', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 9 DAY), INTERVAL 36900 SECOND)),
+(133, 26, 'START_DEPLOY', 'ops1', '开始部署 executeMode=AUTO', 'STATE', 0, 'MANUAL', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 9 DAY), INTERVAL 37200 SECOND)),
+(134, 26, 'FINISH', 'ops1', '成功', 'STATE', 0, 'AUTO', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 9 DAY), INTERVAL 38400 SECOND)),
+(135, 26, 'EXEC', 'system', '[auto] deploy ok md5 verified', 'EXEC', 1, 'AUTO', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 9 DAY), INTERVAL 38400 SECOND)),
+(136, 27, 'APPLY', 'dev2', '提交 大屏全量', 'STATE', 0, 'MANUAL', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 8 DAY), INTERVAL 54000 SECOND)),
+(137, 27, 'APPROVE', 'ops1', '审批通过', 'STATE', 0, 'MANUAL', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 8 DAY), INTERVAL 54900 SECOND)),
+(138, 27, 'START_DEPLOY', 'ops1', '开始部署 executeMode=AUTO', 'STATE', 0, 'MANUAL', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 8 DAY), INTERVAL 55200 SECOND)),
+(139, 27, 'FINISH', 'ops1', '成功', 'STATE', 0, 'AUTO', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 8 DAY), INTERVAL 56400 SECOND)),
+(140, 27, 'EXEC', 'system', '[auto] deploy ok md5 verified', 'EXEC', 1, 'AUTO', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 8 DAY), INTERVAL 56400 SECOND)),
+(141, 28, 'APPLY', 'dev1', '提交 用户中心热更', 'STATE', 0, 'MANUAL', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 7 DAY), INTERVAL 32400 SECOND)),
+(142, 28, 'APPROVE', 'ops2', '审批通过', 'STATE', 0, 'MANUAL', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 7 DAY), INTERVAL 33300 SECOND)),
+(143, 28, 'START_DEPLOY', 'ops2', '开始部署 executeMode=AUTO', 'STATE', 0, 'MANUAL', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 7 DAY), INTERVAL 33600 SECOND)),
+(144, 28, 'FAIL', 'ops2', '连接拒绝', 'STATE', 0, 'AUTO', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 7 DAY), INTERVAL 34800 SECOND)),
+(145, 28, 'EXEC', 'system', '[auto] connection refused by app port 8084', 'EXEC', 1, 'AUTO', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 7 DAY), INTERVAL 34800 SECOND)),
+(146, 29, 'APPLY', 'dev1', '提交 网关中间版', 'STATE', 0, 'MANUAL', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 7 DAY), INTERVAL 50400 SECOND)),
+(147, 29, 'APPROVE', 'ops1', '审批通过', 'STATE', 0, 'MANUAL', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 7 DAY), INTERVAL 51300 SECOND)),
+(148, 29, 'START_DEPLOY', 'ops1', '开始部署 executeMode=AUTO', 'STATE', 0, 'MANUAL', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 7 DAY), INTERVAL 51600 SECOND)),
+(149, 29, 'FINISH', 'ops1', '成功', 'STATE', 0, 'AUTO', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 7 DAY), INTERVAL 52800 SECOND)),
+(150, 29, 'EXEC', 'system', '[auto] deploy ok md5 verified', 'EXEC', 1, 'AUTO', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 7 DAY), INTERVAL 52800 SECOND)),
+(151, 30, 'APPLY', 'dev2', '提交 门户微调', 'STATE', 0, 'MANUAL', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 6 DAY), INTERVAL 39600 SECOND)),
+(152, 30, 'APPROVE', 'ops2', '审批通过', 'STATE', 0, 'MANUAL', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 6 DAY), INTERVAL 40500 SECOND)),
+(153, 30, 'START_DEPLOY', 'ops2', '开始部署 executeMode=MANUAL', 'STATE', 0, 'MANUAL', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 6 DAY), INTERVAL 40800 SECOND)),
+(154, 30, 'FINISH', 'ops2', '成功', 'STATE', 0, 'AUTO', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 6 DAY), INTERVAL 42000 SECOND)),
+(155, 30, 'EXEC', 'system', '[auto] deploy ok md5 verified', 'EXEC', 1, 'AUTO', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 6 DAY), INTERVAL 42000 SECOND)),
+(156, 31, 'APPLY', 'dev2', '提交 认证压测包', 'STATE', 0, 'MANUAL', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 5 DAY), INTERVAL 36000 SECOND)),
+(157, 31, 'APPROVE', 'ops1', '审批通过', 'STATE', 0, 'MANUAL', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 5 DAY), INTERVAL 36900 SECOND)),
+(158, 31, 'START_DEPLOY', 'ops1', '开始部署 executeMode=AUTO', 'STATE', 0, 'MANUAL', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 5 DAY), INTERVAL 37200 SECOND)),
+(159, 31, 'FAIL', 'ops1', '异常堆栈', 'STATE', 0, 'AUTO', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 5 DAY), INTERVAL 38400 SECOND)),
+(160, 31, 'EXEC', 'system', '[auto] Uncaught exception: NullPointerException in AuthFilter', 'EXEC', 1, 'AUTO', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 5 DAY), INTERVAL 38400 SECOND)),
+(161, 31, 'EXEC', 'system', '[auto] nested exception is BindException', 'EXEC', 2, 'AUTO', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 5 DAY), INTERVAL 38400 SECOND)),
+(162, 32, 'APPLY', 'dev1', '提交 订单主版本', 'STATE', 0, 'MANUAL', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 5 DAY), INTERVAL 57600 SECOND)),
+(163, 32, 'APPROVE', 'ops1', '审批通过', 'STATE', 0, 'MANUAL', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 5 DAY), INTERVAL 58500 SECOND)),
+(164, 32, 'START_DEPLOY', 'ops1', '开始部署 executeMode=AUTO', 'STATE', 0, 'MANUAL', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 5 DAY), INTERVAL 58800 SECOND)),
+(165, 32, 'FINISH', 'ops1', '成功', 'STATE', 0, 'AUTO', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 5 DAY), INTERVAL 60000 SECOND)),
+(166, 32, 'EXEC', 'system', '[auto] deploy ok md5 verified', 'EXEC', 1, 'AUTO', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 5 DAY), INTERVAL 60000 SECOND)),
+(167, 33, 'APPLY', 'dev1', '提交 交易预发', 'STATE', 0, 'MANUAL', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 4 DAY), INTERVAL 32400 SECOND)),
+(168, 33, 'APPROVE', 'ops1', '审批通过', 'STATE', 0, 'MANUAL', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 4 DAY), INTERVAL 33300 SECOND)),
+(169, 33, 'START_DEPLOY', 'ops1', '开始部署 executeMode=AUTO', 'STATE', 0, 'MANUAL', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 4 DAY), INTERVAL 33600 SECOND)),
+(170, 33, 'FINISH', 'ops1', '成功', 'STATE', 0, 'AUTO', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 4 DAY), INTERVAL 34800 SECOND)),
+(171, 33, 'EXEC', 'system', '[auto] deploy ok md5 verified', 'EXEC', 1, 'AUTO', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 4 DAY), INTERVAL 34800 SECOND)),
+(172, 34, 'APPLY', 'dev2', '提交 探活重试', 'STATE', 0, 'MANUAL', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 4 DAY), INTERVAL 54000 SECOND)),
+(173, 34, 'APPROVE', 'ops2', '审批通过', 'STATE', 0, 'MANUAL', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 4 DAY), INTERVAL 54900 SECOND)),
+(174, 34, 'START_DEPLOY', 'ops2', '开始部署 executeMode=AUTO', 'STATE', 0, 'MANUAL', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 4 DAY), INTERVAL 55200 SECOND)),
+(175, 34, 'FAIL', 'ops2', '权限 denied', 'STATE', 0, 'AUTO', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 4 DAY), INTERVAL 56400 SECOND)),
+(176, 34, 'EXEC', 'system', '[auto] Permission denied writing /opt/apps/releases', 'EXEC', 1, 'AUTO', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 4 DAY), INTERVAL 56400 SECOND)),
+(177, 35, 'APPLY', 'dev2', '提交 经营指标', 'STATE', 0, 'MANUAL', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 3 DAY), INTERVAL 36000 SECOND)),
+(178, 35, 'APPROVE', 'ops1', '审批通过', 'STATE', 0, 'MANUAL', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 3 DAY), INTERVAL 36900 SECOND)),
+(179, 35, 'START_DEPLOY', 'ops1', '开始部署 executeMode=AUTO', 'STATE', 0, 'MANUAL', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 3 DAY), INTERVAL 37200 SECOND)),
+(180, 35, 'FINISH', 'ops1', '成功', 'STATE', 0, 'AUTO', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 3 DAY), INTERVAL 38400 SECOND)),
+(181, 35, 'EXEC', 'system', '[auto] deploy ok md5 verified', 'EXEC', 1, 'AUTO', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 3 DAY), INTERVAL 38400 SECOND)),
+(182, 36, 'APPLY', 'dev1', '提交 用户中心配置热更新', 'STATE', 0, 'MANUAL', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 3 DAY), INTERVAL 50400 SECOND)),
+(183, 36, 'APPROVE', 'ops1', '审批通过', 'STATE', 0, 'MANUAL', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 3 DAY), INTERVAL 51300 SECOND)),
+(184, 36, 'START_DEPLOY', 'ops1', '开始部署 executeMode=AUTO', 'STATE', 0, 'MANUAL', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 3 DAY), INTERVAL 51600 SECOND)),
+(185, 36, 'FAIL', 'ops1', 'TIMEOUT', 'STATE', 0, 'AUTO', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 3 DAY), INTERVAL 52800 SECOND)),
+(186, 36, 'EXEC', 'system', '[auto] gateway timeout while calling upstream / exceed max-timeout', 'EXEC', 1, 'AUTO', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 3 DAY), INTERVAL 52800 SECOND)),
+(187, 36, 'EXEC', 'system', '[auto] health check timeout after 60s', 'EXEC', 2, 'AUTO', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 3 DAY), INTERVAL 52800 SECOND)),
+(188, 37, 'APPLY', 'dev1', '提交 交易优惠券核销', 'STATE', 0, 'MANUAL', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 2 DAY), INTERVAL 32400 SECOND)),
+(189, 37, 'APPROVE', 'ops1', '审批通过', 'STATE', 0, 'MANUAL', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 2 DAY), INTERVAL 33300 SECOND)),
+(190, 37, 'START_DEPLOY', 'ops1', '开始部署 executeMode=AUTO', 'STATE', 0, 'MANUAL', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 2 DAY), INTERVAL 33600 SECOND)),
+(191, 37, 'FINISH', 'ops1', '自动部署成功', 'STATE', 0, 'AUTO', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 2 DAY), INTERVAL 34800 SECOND)),
+(192, 37, 'EXEC', 'system', '[auto] deploy ok md5 verified', 'EXEC', 1, 'AUTO', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 2 DAY), INTERVAL 34800 SECOND)),
+(193, 38, 'APPLY', 'dev1', '提交 订单超时关闭', 'STATE', 0, 'MANUAL', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 2 DAY), INTERVAL 39600 SECOND)),
+(194, 38, 'APPROVE', 'ops1', '审批通过', 'STATE', 0, 'MANUAL', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 2 DAY), INTERVAL 40500 SECOND)),
+(195, 38, 'START_DEPLOY', 'ops1', '开始部署 executeMode=AUTO', 'STATE', 0, 'MANUAL', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 2 DAY), INTERVAL 40800 SECOND)),
+(196, 38, 'FINISH', 'ops1', '增量完成', 'STATE', 0, 'AUTO', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 2 DAY), INTERVAL 42000 SECOND)),
+(197, 38, 'EXEC', 'system', '[auto] deploy ok md5 verified', 'EXEC', 1, 'AUTO', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 2 DAY), INTERVAL 42000 SECOND)),
+(198, 39, 'APPLY', 'dev2', '提交 门户首页改版', 'STATE', 0, 'MANUAL', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 2 DAY), INTERVAL 50400 SECOND)),
+(199, 39, 'APPROVE', 'ops2', '审批通过', 'STATE', 0, 'MANUAL', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 2 DAY), INTERVAL 51300 SECOND)),
+(200, 39, 'START_DEPLOY', 'ops2', '开始部署 executeMode=MANUAL', 'STATE', 0, 'MANUAL', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 2 DAY), INTERVAL 51600 SECOND)),
+(201, 39, 'FINISH', 'ops2', '手动标记成功', 'STATE', 0, 'AUTO', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 2 DAY), INTERVAL 52800 SECOND)),
+(202, 39, 'EXEC', 'system', '[auto] deploy ok md5 verified', 'EXEC', 1, 'AUTO', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 2 DAY), INTERVAL 52800 SECOND)),
+(203, 40, 'APPLY', 'dev2', '提交 认证 JWT 升级', 'STATE', 0, 'MANUAL', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 1 DAY), INTERVAL 32400 SECOND)),
+(204, 40, 'APPROVE', 'ops1', '审批通过', 'STATE', 0, 'MANUAL', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 1 DAY), INTERVAL 33300 SECOND)),
+(205, 40, 'START_DEPLOY', 'ops1', '开始部署 executeMode=AUTO', 'STATE', 0, 'MANUAL', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 1 DAY), INTERVAL 33600 SECOND)),
+(206, 40, 'FAIL', 'ops1', '缺少 jwt.secret', 'STATE', 0, 'AUTO', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 1 DAY), INTERVAL 34800 SECOND)),
+(207, 40, 'EXEC', 'system', '[auto] ERROR: jwt.secret missing / health check error', 'EXEC', 1, 'AUTO', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 1 DAY), INTERVAL 34800 SECOND)),
+(208, 40, 'EXEC', 'system', '[auto] exit_code=1 retry failed', 'EXEC', 2, 'AUTO', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 1 DAY), INTERVAL 34800 SECOND)),
+(209, 41, 'APPLY', 'ops1', '提交 下单失败率升高回滚', 'STATE', 0, 'MANUAL', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 1 DAY), INTERVAL 39600 SECOND)),
+(210, 41, 'APPROVE', 'ops2', '审批通过', 'STATE', 0, 'MANUAL', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 1 DAY), INTERVAL 40500 SECOND)),
+(211, 41, 'START_DEPLOY', 'ops2', '开始部署 executeMode=AUTO', 'STATE', 0, 'MANUAL', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 1 DAY), INTERVAL 40800 SECOND)),
+(212, 41, 'ROLLBACK', 'ops2', '回滚完成', 'STATE', 0, 'AUTO', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 1 DAY), INTERVAL 42000 SECOND)),
+(213, 41, 'EXEC', 'system', '[auto] deploy ok md5 verified', 'EXEC', 1, 'AUTO', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 1 DAY), INTERVAL 42000 SECOND)),
+(214, 42, 'APPLY', 'dev1', '提交 用户中心提测部署', 'STATE', 0, 'MANUAL', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 1 DAY), INTERVAL 54000 SECOND)),
+(215, 42, 'REJECT', 'ops2', '驳回：缺少 DDL 与回滚方案', 'STATE', 0, 'MANUAL', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 1 DAY), INTERVAL 54900 SECOND)),
+(216, 43, 'APPLY', 'dev1', '提交 移动网关开发环境首发', 'STATE', 0, 'MANUAL', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 0 DAY), INTERVAL 32400 SECOND)),
+(217, 43, 'APPROVE', 'ops1', '审批通过', 'STATE', 0, 'MANUAL', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 0 DAY), INTERVAL 33300 SECOND)),
+(218, 43, 'START_DEPLOY', 'ops1', '部署进行中', 'STATE', 0, 'MANUAL', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 0 DAY), INTERVAL 33600 SECOND)),
+(219, 43, 'EXEC', 'system', '[auto] uploading artifact ...', 'EXEC', 1, 'AUTO', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 0 DAY), INTERVAL 33600 SECOND)),
+(220, 44, 'APPLY', 'dev2', '提交 大屏新增经营指标', 'STATE', 0, 'MANUAL', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 0 DAY), INTERVAL 36000 SECOND)),
+(221, 44, 'APPROVE', 'ops1', '审批通过', 'STATE', 0, 'MANUAL', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 0 DAY), INTERVAL 36900 SECOND)),
+(222, 45, 'APPLY', 'dev2', '提交 探活采集初版验证', 'STATE', 0, 'MANUAL', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 0 DAY), INTERVAL 32400 SECOND)),
+(223, 46, 'APPLY', 'dev1', '提交 订单金额精度修复', 'STATE', 0, 'MANUAL', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 0 DAY), INTERVAL 36000 SECOND)),
+(224, 47, 'APPLY', 'dev2', '提交 门户热修文案', 'STATE', 0, 'MANUAL', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 0 DAY), INTERVAL 57600 SECOND)),
+(225, 47, 'APPROVE', 'ops2', '审批通过', 'STATE', 0, 'MANUAL', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 0 DAY), INTERVAL 58500 SECOND)),
+(226, 47, 'START_DEPLOY', 'ops2', '部署进行中', 'STATE', 0, 'MANUAL', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 0 DAY), INTERVAL 58800 SECOND)),
+(227, 47, 'EXEC', 'system', '[auto] uploading artifact ...', 'EXEC', 1, 'AUTO', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 0 DAY), INTERVAL 58800 SECOND));
+
+-- ----------------------------
+-- 告警：跨近 30 天分布，形成走势 + 未闭环
+-- ----------------------------
+INSERT INTO `alarm` (`id`, `alarm_no`, `app_id`, `server_id`, `deploy_no`, `level`, `content`, `status`, `handler`, `handle_time`, `resolve_time`, `create_time`) VALUES
+(1, 'AL-D001', 1, 5, NULL, 'INFO', '交易服务周发后探活通过', 'RESOLVED', 'ops1', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 28 DAY), INTERVAL 40800 SECOND), DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 28 DAY), INTERVAL 42600 SECOND), DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 28 DAY), INTERVAL 39600 SECOND)),
+(2, 'AL-D002', 4, 5, NULL, 'CRITICAL', '认证服务启动失败，5xx 升高', 'RESOLVED', 'ops1', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 25 DAY), INTERVAL 44400 SECOND), DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 25 DAY), INTERVAL 46200 SECOND), DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 25 DAY), INTERVAL 43200 SECOND)),
+(3, 'AL-D003', 5, 1, NULL, 'WARNING', '用户中心端口连接被拒', 'RESOLVED', 'ops2', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 23 DAY), INTERVAL 58800 SECOND), DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 23 DAY), INTERVAL 60600 SECOND), DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 23 DAY), INTERVAL 57600 SECOND)),
+(4, 'AL-D004', 4, 5, NULL, 'CRITICAL', '认证服务异常退出', 'RESOLVED', 'ops1', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 22 DAY), INTERVAL 69600 SECOND), DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 22 DAY), INTERVAL 71400 SECOND), DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 22 DAY), INTERVAL 68400 SECOND)),
+(5, 'AL-D005', 7, 1, NULL, 'INFO', '网关首发完成', 'RESOLVED', 'ops1', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 20 DAY), INTERVAL 40800 SECOND), DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 20 DAY), INTERVAL 42600 SECOND), DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 20 DAY), INTERVAL 39600 SECOND)),
+(6, 'AL-D006', 5, 1, NULL, 'WARNING', '用户中心部署超时', 'RESOLVED', 'ops1', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 18 DAY), INTERVAL 37200 SECOND), DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 18 DAY), INTERVAL 39000 SECOND), DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 18 DAY), INTERVAL 36000 SECOND)),
+(7, 'AL-D007', 4, 5, NULL, 'CRITICAL', 'JWT 切换后登录失败率升高', 'RESOLVED', 'ops2', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 16 DAY), INTERVAL 40800 SECOND), DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 16 DAY), INTERVAL 42600 SECOND), DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 16 DAY), INTERVAL 39600 SECOND)),
+(8, 'AL-D008', 8, 4, NULL, 'WARNING', '探活采集权限不足', 'RESOLVED', 'ops1', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 15 DAY), INTERVAL 37200 SECOND), DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 15 DAY), INTERVAL 39000 SECOND), DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 15 DAY), INTERVAL 36000 SECOND)),
+(9, 'AL-D009', 5, 1, NULL, 'CRITICAL', '用户中心探活连续失败', 'RESOLVED', 'ops1', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 13 DAY), INTERVAL 66000 SECOND), DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 13 DAY), INTERVAL 67800 SECOND), DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 13 DAY), INTERVAL 64800 SECOND)),
+(10, 'AL-D010', 3, 3, NULL, 'INFO', '门户 CDN 刷新完成', 'RESOLVED', 'ops2', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 12 DAY), INTERVAL 44400 SECOND), DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 12 DAY), INTERVAL 46200 SECOND), DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 12 DAY), INTERVAL 43200 SECOND)),
+(11, 'AL-D011', 1, 5, NULL, 'CRITICAL', '交易灰度失败率升高，已回滚', 'RESOLVED', 'ops2', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 10 DAY), INTERVAL 55200 SECOND), DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 10 DAY), INTERVAL 57000 SECOND), DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 10 DAY), INTERVAL 54000 SECOND)),
+(12, 'AL-D012', 1, 5, NULL, 'WARNING', '回滚后观察期内存偏高', 'RESOLVED', 'ops1', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 10 DAY), INTERVAL 62400 SECOND), DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 10 DAY), INTERVAL 64200 SECOND), DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 10 DAY), INTERVAL 61200 SECOND)),
+(13, 'AL-D013', 2, 6, NULL, 'INFO', '订单监控埋点生效', 'RESOLVED', 'ops1', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 9 DAY), INTERVAL 40800 SECOND), DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 9 DAY), INTERVAL 42600 SECOND), DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 9 DAY), INTERVAL 39600 SECOND)),
+(14, 'AL-D014', 6, 3, NULL, 'WARNING', '大屏磁盘使用率 82%', 'RESOLVED', 'ops2', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 8 DAY), INTERVAL 58800 SECOND), DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 8 DAY), INTERVAL 60600 SECOND), DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 8 DAY), INTERVAL 57600 SECOND)),
+(15, 'AL-D015', 5, 1, NULL, 'WARNING', '用户中心热更连接拒绝', 'HANDLING', 'ops2', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 7 DAY), INTERVAL 37200 SECOND), NULL, DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 7 DAY), INTERVAL 36000 SECOND)),
+(16, 'AL-D016', 7, 1, NULL, 'INFO', '网关中间版发布完成', 'RESOLVED', 'ops1', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 7 DAY), INTERVAL 55200 SECOND), DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 7 DAY), INTERVAL 57000 SECOND), DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 7 DAY), INTERVAL 54000 SECOND)),
+(17, 'AL-D017', 4, 5, NULL, 'CRITICAL', '认证压测包异常堆栈', 'RESOLVED', 'ops1', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 5 DAY), INTERVAL 40800 SECOND), DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 5 DAY), INTERVAL 42600 SECOND), DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 5 DAY), INTERVAL 39600 SECOND)),
+(18, 'AL-D018', 2, 6, NULL, 'INFO', '订单主版本上线', 'RESOLVED', 'ops1', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 5 DAY), INTERVAL 62400 SECOND), DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 5 DAY), INTERVAL 64200 SECOND), DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 5 DAY), INTERVAL 61200 SECOND)),
+(19, 'AL-D019', 1, 5, NULL, 'INFO', '交易预发探活通过', 'RESOLVED', 'ops1', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 4 DAY), INTERVAL 37200 SECOND), DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 4 DAY), INTERVAL 39000 SECOND), DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 4 DAY), INTERVAL 36000 SECOND)),
+(20, 'AL-D020', 8, 4, NULL, 'WARNING', '探活重试仍权限不足', 'HANDLING', 'ops2', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 4 DAY), INTERVAL 58800 SECOND), NULL, DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 4 DAY), INTERVAL 57600 SECOND)),
+(21, 'AL-D021', 6, 3, NULL, 'WARNING', '大屏节点磁盘 86%', 'HANDLING', 'ops2', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 3 DAY), INTERVAL 40800 SECOND), NULL, DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 3 DAY), INTERVAL 39600 SECOND)),
+(22, 'AL-D022', 5, 1, NULL, 'WARNING', '用户中心超时失败后仍离线', 'UNHANDLED', NULL, NULL, NULL, DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 3 DAY), INTERVAL 54000 SECOND)),
+(23, 'AL-D023', 1, 5, NULL, 'INFO', '交易服务发布后 QPS 正常', 'RESOLVED', 'ops1', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 2 DAY), INTERVAL 37200 SECOND), DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 2 DAY), INTERVAL 39000 SECOND), DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 2 DAY), INTERVAL 36000 SECOND)),
+(24, 'AL-D024', 2, 6, NULL, 'WARNING', '订单服务老年代内存 78%', 'RESOLVED', 'ops1', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 2 DAY), INTERVAL 44400 SECOND), DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 2 DAY), INTERVAL 46200 SECOND), DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 2 DAY), INTERVAL 43200 SECOND)),
+(25, 'AL-D025', 4, 5, NULL, 'CRITICAL', '认证服务启动失败', 'RESOLVED', 'ops1', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 1 DAY), INTERVAL 37200 SECOND), DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 1 DAY), INTERVAL 39000 SECOND), DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 1 DAY), INTERVAL 36000 SECOND)),
+(26, 'AL-D026', 1, 5, NULL, 'CRITICAL', '下单失败率升高已回滚', 'RESOLVED', 'ops2', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 1 DAY), INTERVAL 44400 SECOND), DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 1 DAY), INTERVAL 46200 SECOND), DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 1 DAY), INTERVAL 43200 SECOND)),
+(27, 'AL-D027', 7, 1, NULL, 'INFO', '移动网关自动部署进行中', 'HANDLING', 'ops1', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 0 DAY), INTERVAL 33600 SECOND), NULL, DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 0 DAY), INTERVAL 32400 SECOND)),
+(28, 'AL-D028', 2, 6, NULL, 'CRITICAL', '订单节点心跳丢失，注册中心已摘除', 'UNHANDLED', NULL, NULL, NULL, DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 0 DAY), INTERVAL 36000 SECOND)),
+(29, 'AL-D029', 8, 4, NULL, 'WARNING', '探活采集所在测试机处于维护中', 'UNHANDLED', NULL, NULL, NULL, DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 0 DAY), INTERVAL 36000 SECOND)),
+(30, 'AL-D030', 6, 3, NULL, 'INFO', '门户缓存巡检正常', 'RESOLVED', 'ops2', DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 0 DAY), INTERVAL 40800 SECOND), DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 0 DAY), INTERVAL 42600 SECOND), DATE_ADD(DATE_SUB(CURDATE(), INTERVAL 0 DAY), INTERVAL 39600 SECOND));
+
+-- 复位自增
+ALTER TABLE `project` AUTO_INCREMENT = 100;
+ALTER TABLE `server` AUTO_INCREMENT = 100;
+ALTER TABLE `app` AUTO_INCREMENT = 100;
+ALTER TABLE `deploy` AUTO_INCREMENT = 200;
+ALTER TABLE `deploy_log` AUTO_INCREMENT = 2000;
+ALTER TABLE `deploy_execution` AUTO_INCREMENT = 200;
+ALTER TABLE `deploy_artifact` AUTO_INCREMENT = 100;
+ALTER TABLE `alarm` AUTO_INCREMENT = 200;
+ALTER TABLE `notice` AUTO_INCREMENT = 100;

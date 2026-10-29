@@ -3,30 +3,24 @@ package com.example.entity;
 import java.io.Serializable;
 
 /**
- * 运维人员
-*/
-public class Ops extends Account implements Serializable {
+ * 人员。管理员、开发、运维共用这一张表，用 role 区分。
+ */
+public class Person extends Account implements Serializable {
     private static final long serialVersionUID = 1L;
 
-    /** ID */
     private Integer id;
-    /** 用户名 */
     private String username;
-    /** 密码 */
     private String password;
-    /** 姓名 */
     private String name;
-    /** 手机号 */
     private String phone;
-    /** 邮箱 */
     private String email;
-    /** 状态：ACTIVE-正常 DISABLED-禁用 */
+    private String avatar;
+    /** ADMIN / DEV / OPS */
+    private String role;
+    /** ACTIVE / DISABLED */
     private String status;
-    /** 创建时间 */
     private String createTime;
-    /** 更新时间 */
     private String updateTime;
-    /** 逻辑删除：0-未删除 1-已删除 */
     private Integer deleted;
 
     @Override
@@ -83,6 +77,26 @@ public class Ops extends Account implements Serializable {
 
     public void setEmail(String email) {
         this.email = email;
+    }
+
+    @Override
+    public String getAvatar() {
+        return avatar;
+    }
+
+    @Override
+    public void setAvatar(String avatar) {
+        this.avatar = avatar;
+    }
+
+    @Override
+    public String getRole() {
+        return role;
+    }
+
+    @Override
+    public void setRole(String role) {
+        this.role = role;
     }
 
     public String getStatus() {

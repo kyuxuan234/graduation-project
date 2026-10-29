@@ -75,7 +75,31 @@ export function buildInbox({ user, deploys = [], alarms = [] }) {
     })
   } else if (role === 'DEV') {
     deploys.filter(row => row.applicant === username).forEach(row => {
-      if (row.status === 'PENDING') {
+      if (row.status === 'REVIEW') {
+        items.push(item({
+          key: 'my-review-' + row.id,
+          title: '待技术审查',
+          text: '你的发布单 ' + row.deployNo + ' 等待技术负责人审查。',
+          path: '/deploy',
+          query: { status: 'REVIEW' }
+        }))
+      } else if (row.status === 'TESTING') {
+        items.push(item({
+          key: 'my-testing-' + row.id,
+          title: '待测试验收',
+          text: '你的发布单 ' + row.deployNo + ' 等待测试验收。',
+          path: '/deploy',
+          query: { status: 'TESTING' }
+        }))
+      } else if (row.status === 'ACCEPTING') {
+        items.push(item({
+          key: 'my-accepting-' + row.id,
+          title: '待产品验收',
+          text: '你的发布单 ' + row.deployNo + ' 等待产品经理验收。',
+          path: '/deploy',
+          query: { status: 'ACCEPTING' }
+        }))
+      } else if (row.status === 'PENDING') {
         items.push(item({
           key: 'my-pending-' + row.id,
           title: '审批中',
@@ -122,6 +146,23 @@ export function buildInbox({ user, deploys = [], alarms = [] }) {
           query: { status: 'FAILED' }
         }))
       }
+    })
+  } else if (role === 'TL' || role === 'QA' || role === 'PM') {
+    const gate = role === 'TL'
+        ? { status: 'REVIEW', title: '待你审查', text: '请审查发布变更' }
+        : role === 'QA'
+            ? { status: 'TESTING', title: '待你验收', text: '请做测试验收' }
+            : { status: 'ACCEPTING', title: '待你验收', text: '请做业务验收' }
+    deploys.filter(row => row.status === gate.status).forEach(row => {
+      items.push(item({
+        key: 'gate-' + row.id,
+        tone: 'warn',
+        notifyType: 'warning',
+        title: gate.title,
+        text: (row.appName || '应用') + '发布单 ' + row.deployNo + '，' + gate.text + '。',
+        path: '/deploy',
+        query: { status: gate.status }
+      }))
     })
   }
   return sortInbox(items)

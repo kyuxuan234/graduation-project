@@ -4,6 +4,9 @@
       <div class="search-fields">
         <el-input prefix-icon="el-icon-user" placeholder="请输入用户名查询" style="width: 180px" v-model="params.username" clearable></el-input>
         <el-input prefix-icon="el-icon-postcard" placeholder="请输入姓名查询" style="width: 180px" v-model="params.name" clearable></el-input>
+        <el-select placeholder="请选择角色" style="width: 140px" v-model="params.role" clearable>
+          <el-option v-for="item in roleOptions" :key="item.value" :label="item.label" :value="item.value"></el-option>
+        </el-select>
         <el-select placeholder="请选择状态" style="width: 130px" v-model="params.status" clearable>
           <el-option v-for="item in statusOptions" :key="item.value" :label="item.label" :value="item.value"></el-option>
         </el-select>
@@ -31,10 +34,10 @@
             <span class="cell-text"><i class="el-icon-user"></i>{{ scope.row.username }}</span>
           </template>
         </el-table-column>
-        <el-table-column label="角色" width="110" align="center">
+        <el-table-column label="角色" width="120" align="center">
           <template slot="header"><span class="th-label"><i class="el-icon-s-check"></i>角色</span></template>
           <template v-slot="scope">
-            <el-tag size="mini" type="warning">{{ ROLE_NAMES[scope.row.role] || '运维' }}</el-tag>
+            <el-tag size="mini" :type="tagType(scope.row.role)">{{ ROLE_NAMES[scope.row.role] || scope.row.role }}</el-tag>
           </template>
         </el-table-column>
         <el-table-column label="手机号" width="160">
@@ -87,13 +90,18 @@
       </div>
     </div>
 
-    <el-dialog title="运维人员" :visible.sync="fromVisible" width="40%" :close-on-click-modal="false" destroy-on-close>
+    <el-dialog title="人员" :visible.sync="fromVisible" width="40%" :close-on-click-modal="false" destroy-on-close>
       <el-form :model="form" label-width="100px" style="padding-right: 50px" :rules="rules" ref="formRef">
         <el-form-item label="用户名" prop="username">
           <el-input v-model="form.username" placeholder="用户名" :disabled="!!form.id"></el-input>
         </el-form-item>
         <el-form-item label="姓名" prop="name">
           <el-input v-model="form.name" placeholder="姓名"></el-input>
+        </el-form-item>
+        <el-form-item label="角色" prop="role">
+          <el-select v-model="form.role" placeholder="请选择角色" style="width: 100%">
+            <el-option v-for="item in roleOptions" :key="item.value" :label="item.label" :value="item.value"></el-option>
+          </el-select>
         </el-form-item>
         <el-form-item label="手机号" prop="phone">
           <el-input v-model="form.phone" placeholder="手机号"></el-input>
@@ -117,19 +125,28 @@
 </template>
 
 <script>
-import { ROLE_NAMES, rememberPersons } from '@/utils/person'
+import { ROLE_NAMES, ROLE_TAG, rememberPersons } from '@/utils/person'
 
 export default {
-  name: "Ops",
+  name: "Person",
   data() {
     return {
-      tableData: [],  // 所有的数据
-      pageNum: 1,   // 当前的页码
-      pageSize: 10,  // 每页显示的个数
+      tableData: [],
+      pageNum: 1,
+      pageSize: 10,
       total: 0,
-      params: { username: null, name: null, status: null },   // 搜索条件
+      params: { username: null, name: null, role: null, status: null },
       fromVisible: false,
       form: {},
+      user: JSON.parse(localStorage.getItem('xm-user') || '{}'),
+      roleOptions: [
+        { value: 'ADMIN', label: '超级管理员' },
+        { value: 'DEV', label: '开发' },
+        { value: 'TL', label: '技术负责人' },
+        { value: 'QA', label: '测试' },
+        { value: 'PM', label: '产品经理' },
+        { value: 'OPS', label: '运维' },
+      ],
       statusOptions: [
         { value: 'ACTIVE', label: '正常' },
         { value: 'DISABLED', label: '禁用' },
@@ -140,7 +157,10 @@ export default {
       rules: {
         username: [
           {required: true, message: '请输入用户名', trigger: 'blur'},
-        ]
+        ],
+        role: [
+          {required: true, message: '请选择角色', trigger: 'change'},
+        ],
       },
       ids: [],
       ROLE_NAMES,
@@ -150,42 +170,45 @@ export default {
     this.load(1)
   },
   methods: {
+    tagType(role) {
+      return ROLE_TAG[role] || undefined
+    },
     canDelete(row) {
-      return row.status !== 'DISABLED'
+      return row.status !== 'DISABLED' && row.id !== this.user.id
     },
     canReset(row) {
       return row.status !== 'DISABLED'
     },
-    handleAdd() {   // 新增数据
-      this.form = { status: 'ACTIVE' }  // 新增数据的时候清空数据
-      this.fromVisible = true   // 打开弹窗
+    handleAdd() {
+      this.form = { status: 'ACTIVE', role: 'DEV' }
+      this.fromVisible = true
     },
-    handleEdit(row) {   // 编辑数据
-      this.form = JSON.parse(JSON.stringify(row))  // 给form对象赋值  注意要深拷贝数据
-      this.fromVisible = true   // 打开弹窗
+    handleEdit(row) {
+      this.form = JSON.parse(JSON.stringify(row))
+      this.fromVisible = true
     },
-    save() {   // 保存按钮触发的逻辑  它会触发新增或者更新
+    save() {
       this.$refs.formRef.validate((valid) => {
         if (valid) {
           this.$request({
-            url: this.form.id ? '/ops/update' : '/ops/add',
+            url: this.form.id ? '/person/update' : '/person/add',
             method: this.form.id ? 'PUT' : 'POST',
             data: this.form
           }).then(res => {
-            if (res.code === '200') {  // 表示成功保存
+            if (res.code === '200') {
               this.$message.success('保存成功')
               this.load(1)
               this.fromVisible = false
             } else {
-              this.$message.error(res.msg)  // 弹出错误的信息
+              this.$message.error(res.msg)
             }
           })
         }
       })
     },
-    resetPassword(row) {   // 重置密码为123456，后端会加盐加密后落库
-      this.$confirm('确定将 ' + row.username + ' 的密码重置为 123456 吗？', '确认重置', {type: "warning"}).then(response => {
-        this.$request.put('/ops/update', { id: row.id, password: '123456' }).then(res => {
+    resetPassword(row) {
+      this.$confirm('确定将 ' + row.username + ' 的密码重置为 123456 吗？', '确认重置', {type: "warning"}).then(() => {
+        this.$request.put('/person/update', { id: row.id, password: '123456' }).then(res => {
           if (res.code === '200') {
             this.$message.success('密码已重置为123456')
           } else {
@@ -195,55 +218,56 @@ export default {
       }).catch(() => {
       })
     },
-    del(id) {   // 单个删除
-      this.$confirm('您确定删除吗？', '确认删除', {type: "warning"}).then(response => {
-        this.$request.delete('/ops/delete/' + id).then(res => {
-          if (res.code === '200') {   // 表示操作成功
+    del(id) {
+      this.$confirm('您确定删除吗？', '确认删除', {type: "warning"}).then(() => {
+        this.$request.delete('/person/delete/' + id).then(res => {
+          if (res.code === '200') {
             this.$message.success('操作成功')
             this.load(1)
           } else {
-            this.$message.error(res.msg)  // 弹出错误的信息
+            this.$message.error(res.msg)
           }
         })
       }).catch(() => {
       })
     },
-    handleSelectionChange(rows) {   // 当前选中的所有的行数据
+    handleSelectionChange(rows) {
       this.ids = rows.map(v => v.id)
     },
-    delBatch() {   // 批量删除
+    delBatch() {
       if (!this.ids.length) {
         this.$message.warning('请选择数据')
         return
       }
-      this.$confirm('您确定批量删除这些数据吗？', '确认删除', {type: "warning"}).then(response => {
-        this.$request.delete('/ops/delete/batch', {data: this.ids}).then(res => {
-          if (res.code === '200') {   // 表示操作成功
+      this.$confirm('您确定批量删除这些数据吗？', '确认删除', {type: "warning"}).then(() => {
+        this.$request.delete('/person/delete/batch', {data: this.ids}).then(res => {
+          if (res.code === '200') {
             this.$message.success('操作成功')
             this.load(1)
           } else {
-            this.$message.error(res.msg)  // 弹出错误的信息
+            this.$message.error(res.msg)
           }
         })
       }).catch(() => {
       })
     },
-    load(pageNum) {  // 分页查询
+    load(pageNum) {
       if (pageNum) this.pageNum = pageNum
-      this.$request.get('/ops/selectPage', {
-        params: {
-          pageNum: this.pageNum,
-          pageSize: this.pageSize,
-          ...this.params,
-        }
-      }).then(res => {
+      const query = {
+        pageNum: this.pageNum,
+        pageSize: this.pageSize,
+      }
+      Object.keys(this.params).forEach(key => {
+        if (this.params[key]) query[key] = this.params[key]
+      })
+      this.$request.get('/person/selectPage', { params: query }).then(res => {
         this.tableData = res.data?.list
         this.total = res.data?.total
         rememberPersons(this.tableData)
       })
     },
     reset() {
-      this.params = { username: null, name: null, status: null }
+      this.params = { username: null, name: null, role: null, status: null }
       this.load(1)
     },
     handleCurrentChange(pageNum) {

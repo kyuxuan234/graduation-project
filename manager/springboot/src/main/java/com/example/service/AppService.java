@@ -1,12 +1,16 @@
 package com.example.service;
 
 import cn.hutool.core.util.ObjectUtil;
+import cn.hutool.core.util.StrUtil;
+import com.example.common.DeployScripts;
 import com.example.common.enums.AppStatusEnum;
 import com.example.common.enums.ResultCodeEnum;
 import com.example.entity.App;
+import com.example.entity.Server;
 import com.example.exception.BusinessException;
 import com.example.mapper.AppMapper;
 import com.example.mapper.DeployMapper;
+import com.example.mapper.ServerMapper;
 import com.github.pagehelper.PageHelper;
 import com.github.pagehelper.PageInfo;
 import org.springframework.stereotype.Service;
@@ -25,6 +29,31 @@ public class AppService {
 
     @Resource
     private DeployMapper deployMapper;
+
+    @Resource
+    private ServerMapper serverMapper;
+
+    /**
+     * 按应用仓库、版本和目标机部署目录生成拉取代码脚本。
+     */
+    public String repoScript(App app) {
+        if (app == null || StrUtil.isBlank(app.getRepoUrl()) || StrUtil.isBlank(app.getVersion()) || app.getServerId() == null) {
+            throw new BusinessException(ResultCodeEnum.PARAM_LOST_ERROR.code, "请先填写代码仓库、版本并选择部署环境");
+        }
+        Server server = serverMapper.selectById(app.getServerId());
+        if (server == null || StrUtil.isBlank(server.getDeployPath())) {
+            throw new BusinessException(ResultCodeEnum.PARAM_ERROR.code, "部署环境未配置部署目录");
+        }
+        String appKey = StrUtil.isNotBlank(app.getCode()) ? app.getCode() : app.getName();
+        if (StrUtil.isBlank(appKey)) {
+            throw new BusinessException(ResultCodeEnum.PARAM_LOST_ERROR.code, "请填写应用编号");
+        }
+        try {
+            return DeployScripts.deploy(appKey, app.getVersion().trim(), server.getDeployPath(), app.getRepoUrl().trim());
+        } catch (IllegalArgumentException e) {
+            throw new BusinessException(ResultCodeEnum.PARAM_ERROR.code, e.getMessage());
+        }
+    }
 
     /**
      * 新增

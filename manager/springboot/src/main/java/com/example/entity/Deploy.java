@@ -1,6 +1,7 @@
 package com.example.entity;
 
 import java.io.Serializable;
+import java.util.List;
 
 /**
  * 部署单
@@ -55,6 +56,8 @@ public class Deploy implements Serializable {
     private String appCode;
     /** 联查字段：目标服务器主机名 */
     private String serverName;
+    /** 联查字段：目标环境 DEV/TEST/PROD */
+    private String serverEnv;
     /** 联查字段：申请人角色 */
     private String applicantRole;
     /** 联查字段：审批人角色 */
@@ -64,6 +67,12 @@ public class Deploy implements Serializable {
     private String startTime;
     /** 查询条件：申请时间范围-结束 */
     private String endTime;
+    /** 角色隔离：只看该申请人，精确匹配 */
+    private String scopeApplicant;
+    /** 角色隔离：只看该环境 */
+    private String scopeEnv;
+    /** 角色隔离：只看这些状态 */
+    private List<String> scopeStatuses;
 
     public Integer getId() {
         return id;
@@ -233,6 +242,14 @@ public class Deploy implements Serializable {
         this.serverName = serverName;
     }
 
+    public String getServerEnv() {
+        return serverEnv;
+    }
+
+    public void setServerEnv(String serverEnv) {
+        this.serverEnv = serverEnv;
+    }
+
     public String getApplicantRole() {
         return applicantRole;
     }
@@ -263,6 +280,30 @@ public class Deploy implements Serializable {
 
     public void setEndTime(String endTime) {
         this.endTime = endTime;
+    }
+
+    public String getScopeApplicant() {
+        return scopeApplicant;
+    }
+
+    public void setScopeApplicant(String scopeApplicant) {
+        this.scopeApplicant = scopeApplicant;
+    }
+
+    public String getScopeEnv() {
+        return scopeEnv;
+    }
+
+    public void setScopeEnv(String scopeEnv) {
+        this.scopeEnv = scopeEnv;
+    }
+
+    public List<String> getScopeStatuses() {
+        return scopeStatuses;
+    }
+
+    public void setScopeStatuses(List<String> scopeStatuses) {
+        this.scopeStatuses = scopeStatuses;
     }
 
     public String getRollbackVersion() {

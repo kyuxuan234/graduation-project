@@ -2,6 +2,7 @@ package com.example.common;
 
 import com.example.common.enums.DeployStatusEnum;
 import com.example.common.enums.ResultCodeEnum;
+import com.example.common.enums.ServerEnvEnum;
 import com.example.exception.BusinessException;
 import org.junit.jupiter.api.Test;
 
@@ -48,6 +49,21 @@ class DeployStatusMachineTest {
         BusinessException illegalResult = assertThrows(BusinessException.class,
                 () -> DeployStatusMachine.assertFinish(DeployStatusEnum.DEPLOYING.name(), DeployStatusEnum.APPROVED.name()));
         assertEquals(ResultCodeEnum.DEPLOY_STATUS_ERROR.code, illegalResult.getCode());
+    }
+
+    @Test
+    void reviewGatesAdvanceInOrder() {
+        assertEquals(DeployStatusEnum.TESTING.name(),
+                DeployStatusMachine.passTarget(DeployStatusEnum.REVIEW.name(), ServerEnvEnum.PROD.name()));
+        assertEquals(DeployStatusEnum.ACCEPTING.name(),
+                DeployStatusMachine.passTarget(DeployStatusEnum.TESTING.name(), ServerEnvEnum.PROD.name()));
+        assertEquals(DeployStatusEnum.PENDING.name(),
+                DeployStatusMachine.passTarget(DeployStatusEnum.TESTING.name(), ServerEnvEnum.TEST.name()));
+        assertEquals(DeployStatusEnum.PENDING.name(),
+                DeployStatusMachine.passTarget(DeployStatusEnum.ACCEPTING.name(), ServerEnvEnum.PROD.name()));
+        BusinessException ex = assertThrows(BusinessException.class,
+                () -> DeployStatusMachine.passTarget(DeployStatusEnum.PENDING.name(), ServerEnvEnum.PROD.name()));
+        assertEquals(ResultCodeEnum.DEPLOY_STATUS_ERROR.code, ex.getCode());
     }
 
     @Test

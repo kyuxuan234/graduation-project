@@ -49,6 +49,7 @@ public enum ResultCodeEnum {
     MAIL_SEND_ERROR("6027", "邮件发送失败"),
     DEPLOY_BUSY("6035", "该应用有正在进行的部署，请等待完成"),
     DEPLOY_CONFLICT("6036", "部署状态已被其他人更新，请刷新后重试"),
+    PROJECT_LEADER_INVALID("6037", "开发负责人须是在职的开发人员"),
     ;
 
     public String code;

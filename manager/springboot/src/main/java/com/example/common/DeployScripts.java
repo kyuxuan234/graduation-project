@@ -20,11 +20,10 @@ public final class DeployScripts {
             + "DEST=\"$DEPLOY_PATH/releases/$VERSION\"\n"
             + "mkdir -p \"$DEPLOY_PATH/releases\"\n"
             + "if [ -d \"$DEST/.git\" ]; then\n"
-            + "  git -C \"$DEST\" fetch --tags --force origin\n"
-            + "  git -C \"$DEST\" checkout --force \"$VERSION\"\n"
+            + "  ( cd \"$DEST\" && git fetch --tags --force origin && git checkout --force \"$VERSION\" )\n"
             + "else\n"
             + "  rm -rf \"$DEST\"\n"
-            + "  git clone --branch \"$VERSION\" --depth 1 \"$REPO_URL\" \"$DEST\"\n"
+            + "  git clone --branch \"$VERSION\" \"$REPO_URL\" \"$DEST\"\n"
             + "fi\n"
             + "ln -sfn \"$DEST\" \"$DEPLOY_PATH/current\"\n"
             + "echo \"deploy ok $APP_NAME $VERSION\"\n";
@@ -87,7 +86,7 @@ public final class DeployScripts {
     }
 
     private static void check(String label, String value) {
-        if (StrUtil.isBlank(value) || !value.matches(SAFE)) {
+        if (StrUtil.isBlank(value) || value.contains("..") || !value.matches(SAFE)) {
             throw new IllegalArgumentException(label + "包含非法字符");
         }
     }

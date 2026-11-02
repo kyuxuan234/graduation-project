@@ -47,14 +47,15 @@ MyBatis Mapper  ↔  MySQL manager
 
 - 前端直连 `http://localhost:9090`（`.env.development`），不做 webpack 代理；后端 `CorsFilter` 放行跨域。
 - JWT 放在请求头 `token`，签名密钥为配置项 `jwt.secret`（本地见 `application-dev.yml`，生产见环境变量 `JWT_SECRET`），有效期 2 小时。
-- 登录按用户名查 `person` 表，角色存在该行的 `role` 字段（`ADMIN` / `DEV` / `OPS`）；**新密码用 BCrypt 存储**，库里历史遗留的 32 位 `MD5(明文 + devops_salt_2026)` 密文仍可登录（兼容读，见 `utils/PasswordUtils.java`）。
+- 登录按用户名查 `person` 表，角色存在该行的 `role` 字段（`ADMIN` / `DEV` / `TL` / `QA` / `PM` / `OPS`）；**新密码用 BCrypt 存储**，库里历史遗留的 32 位 `MD5(明文 + devops_salt_2026)` 密文仍可登录（兼容读，见 `utils/PasswordUtils.java`）。
+- 自动部署按应用上的仓库地址在目标机拉取对应版本。生产构建未配置 `VUE_APP_API_BASE_URL` 时，前端按当前主机名访问 9090。
 
 ### 资产闭环（以应用为枢纽）
 
 ```
 project ──► app ◄── server
               │
-              ├── deploy ──► deploy_log / deploy_execution / deploy_artifact
+              ├── deploy ──► deploy_log / deploy_execution
               └── alarm
 ```
 
@@ -66,12 +67,12 @@ project ──► app ◄── server
 |---|---|---|
 | ADMIN | `person.role = ADMIN` | 全量菜单；绕过角色校验；管团队成员与发布通知 |
 | DEV | `person.role = DEV` | 发起发布单；技术审查前只能改自己的单 |
-| TL | `person.role = TL` | 审查发布变更，通过后进入测试验收 |
-| QA | `person.role = QA` | 对审查通过的发布单做测试验收 |
-| PM | `person.role = PM` | 对测试通过的发布单做业务验收，通过后交给运维 |
+| TL | `person.role = TL` | 审查生产发布变更，通过后进入产品验收 |
+| QA | `person.role = QA` | 验收测试环境的发布单，通过后交给运维 |
+| PM | `person.role = PM` | 验收技术审查已通过的生产发布单，通过后交给运维 |
 | OPS | `person.role = OPS` | 审批已验收的发布单；执行、回滚；接手并闭环告警 |
 
-侧边栏：仪表盘 / 应用 / 部署 / 告警 / 运维分析全员可见；**服务器仅 ADMIN+OPS**；项目 ADMIN+DEV；人员管理与公告仅 ADMIN。人员账号在同一张 `person` 表，页面按角色筛选。路由 `meta.roles` 与接口层再各卡一次。接口层的角色校验由 `AuthUtils.requireRole` 把关，其中 **ADMIN 会被无条件放行（旁路角色校验）**，便于演示与排障（前端登录与 WebSocket 握手同样接受 ADMIN）。
+侧边栏分三组：发布看板全员可见；项目资产里业务项目为 ADMIN+DEV+TL（开发维护资料，技术负责人分配开发负责人），应用服务为 ADMIN+DEV+OPS，部署环境为 ADMIN+OPS；发布管控里发布单对参与流程的角色可见，发布告警和发布报表仅 ADMIN+OPS；团队设置为 ADMIN。人员账号在同一张 `person` 表。路由 `meta.roles` 与接口层再各卡一次。接口层的角色校验由 `AuthUtils.requireRole` 把关，其中 **ADMIN 会被无条件放行（旁路角色校验）**，便于演示与排障（前端登录与 WebSocket 握手同样接受 ADMIN）。
 
 ### 主要页面
 
@@ -85,15 +86,22 @@ project ──► app ◄── server
 
 部署单只允许合法跳转，集中在 `DeployStatusMachine`：
 
-```
-PENDING ──审批──► APPROVED ──开始──► DEPLOYING ──完成──► SUCCESS
-   │                                    │
-   └──驳回──► REJECTED                   └──完成──► FAILED
+新建发布单的起点由目标服务器环境决定：
 
-SUCCESS ──回滚──► DEPLOYING（类型改为 ROLLBACK）──完成──► SUCCESS / FAILED
+```
+开发环境 DEV：  提交 ──► PENDING
+测试环境 TEST： 提交 ──► TESTING ──通过──► PENDING
+生产环境 PROD： 提交 ──► REVIEW ──通过──► ACCEPTING ──通过──► PENDING
+
+PENDING ──运维审批──► APPROVED ──开始──► DEPLOYING ──完成──► SUCCESS
+   │                                      │
+   └──驳回──► REJECTED                     └──完成──► FAILED
+
+任一审查或验收环节驳回，也进入 REJECTED。
+FAILED ──回滚──► DEPLOYING（类型改为 ROLLBACK）──完成──► SUCCESS / FAILED
 ```
 
-非法跳转直接抛业务异常。每次流转在同一事务里写 `deploy_log`（申请 / 通过 / 驳回 / 开始 / 成功 / 失败 / 回滚）。
+技术审查只处理生产环境的 `REVIEW`，通过后进入产品验收。测试验收只处理测试环境的 `TESTING`，通过后交给运维。产品验收只处理生产环境的 `ACCEPTING`。非法跳转直接抛业务异常。每次流转在同一事务里写 `deploy_log`。
 
 ### 2. 应用台账跟部署结果对齐
 
@@ -148,7 +156,7 @@ SOURCE manager/springboot/src/main/resources/sql/schema.sql;
 SOURCE manager/springboot/src/main/resources/sql/data.sql;
 ```
 
-已有旧库升级顺序见 `manager/springboot/src/main/resources/sql/README.md`（含 SSH、部署执行、制品、`execute_mode` 等 `upgrade_*.sql`）。全新安装不要再跑升级脚本。
+已有旧库升级顺序见 `manager/springboot/src/main/resources/sql/README.md`。`data.sql` 和 `demo_seed.sql` 由同目录 `_gen_demo_seed.py` 生成，改演示数据请改生成器再运行。全新安装不要再跑升级脚本。生产启动要设置 `SPRING_PROFILES_ACTIVE=prod`；不设置时默认是 `dev`。
 
 ### 启动（本机 IDE / 命令行）
 
@@ -195,13 +203,14 @@ CRUD 统一：`POST /{模块}/add`、`PUT /update`、`DELETE /delete/{id}`、`GE
 | 方法 | 路径 | 角色 |
 |---|---|---|
 | POST | `/login` | 匿名 |
+| PUT | `/deploy/gate/{id}?result=PASS\|REJECTED` | TL / QA / PM（按当前状态） |
 | PUT | `/deploy/approve/{id}?result=APPROVED\|REJECTED` | OPS |
 | PUT | `/deploy/startDeploy/{id}?executeMode=AUTO\|MANUAL` | OPS |
 | PUT | `/deploy/finishDeploy/{id}?result=SUCCESS\|FAILED` | OPS（手动收尾） |
 | PUT | `/deploy/rollback/{id}` | OPS |
 | PUT | `/alarm/handle/{id}`、`/alarm/resolve/{id}` | OPS |
 
-统计与分析：`/statistics/*`（含部署趋势、告警状态、错误 TOP 等）。WebSocket 终端：`/ssh/terminal?deployId={部署单id}&token={登录token}`，仅 OPS/ADMIN 且必须挂在一张部署单上（见 `common/config/SshWebSocketConfig.java`、`SshHandshakeInterceptor`）。
+注册：`POST /register`。修改密码：`PUT /updatePassword`。统计与分析：`/statistics/*`（含部署趋势、告警状态、错误 TOP 等）。WebSocket 终端：`ws://主机:9090/ssh/terminal?deployId={部署单id}&token={登录token}`，仅 OPS/ADMIN 且必须挂在一张部署单上（见 `common/config/SshWebSocketConfig.java`、`SshHandshakeInterceptor`）。开发环境前端把地址从 `VUE_APP_API_BASE_URL` 推导，不再拼页面自己的 `/api`。
 
 ### 自测
 

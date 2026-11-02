@@ -8,8 +8,9 @@ import com.example.common.enums.ResultCodeEnum;
 import com.example.entity.App;
 import com.example.entity.Server;
 import com.example.exception.BusinessException;
+import com.example.mapper.AppInstanceMapper;
 import com.example.mapper.AppMapper;
-import com.example.mapper.DeployMapper;
+import com.example.mapper.ProjectMapper;
 import com.example.mapper.ServerMapper;
 import com.github.pagehelper.PageHelper;
 import com.github.pagehelper.PageInfo;
@@ -28,7 +29,10 @@ public class AppService {
     private AppMapper appMapper;
 
     @Resource
-    private DeployMapper deployMapper;
+    private AppInstanceMapper appInstanceMapper;
+
+    @Resource
+    private ProjectMapper projectMapper;
 
     @Resource
     private ServerMapper serverMapper;
@@ -37,12 +41,12 @@ public class AppService {
      * 按应用仓库、版本和目标机部署目录生成拉取代码脚本。
      */
     public String repoScript(App app) {
-        if (app == null || StrUtil.isBlank(app.getRepoUrl()) || StrUtil.isBlank(app.getVersion()) || app.getServerId() == null) {
-            throw new BusinessException(ResultCodeEnum.PARAM_LOST_ERROR.code, "请先填写代码仓库、版本并选择部署环境");
+        if (app == null || app.getId() == null || StrUtil.isBlank(app.getRepoUrl()) || StrUtil.isBlank(app.getVersion()) || app.getServerId() == null) {
+            throw new BusinessException(ResultCodeEnum.PARAM_LOST_ERROR.code, "请先选择应用、版本和目标服务器");
         }
         Server server = serverMapper.selectById(app.getServerId());
         if (server == null || StrUtil.isBlank(server.getDeployPath())) {
-            throw new BusinessException(ResultCodeEnum.PARAM_ERROR.code, "部署环境未配置部署目录");
+            throw new BusinessException(ResultCodeEnum.PARAM_ERROR.code, "目标服务器未配置部署目录");
         }
         String appKey = StrUtil.isNotBlank(app.getCode()) ? app.getCode() : app.getName();
         if (StrUtil.isBlank(appKey)) {
@@ -60,6 +64,7 @@ public class AppService {
      */
     public void add(App app) {
         checkCodeUnique(app.getCode(), null);
+        requireProject(app.getProjectId());
         if (ObjectUtil.isEmpty(app.getStatus())) {
             app.setStatus(AppStatusEnum.OFFLINE.name());
         }
@@ -74,13 +79,10 @@ public class AppService {
         if (ObjectUtil.isNull(dbApp)) {
             throw new BusinessException(ResultCodeEnum.APP_NOT_EXIST_ERROR);
         }
-        if (AppStatusEnum.ONLINE.name().equals(dbApp.getStatus())) {
+        if (appInstanceMapper.countOnlineByAppId(id) > 0) {
             throw new BusinessException(ResultCodeEnum.STATUS_LOCKED_ERROR);
         }
-        // 该应用下仍有部署单时不允许删除
-        if (deployMapper.countByAppId(id) > 0) {
-            throw new BusinessException(ResultCodeEnum.APP_HAS_DEPLOYS);
-        }
+        appInstanceMapper.deleteByAppId(id);
         appMapper.deleteById(id);
     }
 
@@ -98,6 +100,9 @@ public class AppService {
      */
     public void updateById(App app) {
         checkCodeUnique(app.getCode(), app.getId());
+        if (app.getProjectId() != null) {
+            requireProject(app.getProjectId());
+        }
         appMapper.updateById(app);
     }
 
@@ -111,6 +116,15 @@ public class AppService {
         App dbApp = appMapper.selectByCode(code);
         if (ObjectUtil.isNotNull(dbApp) && !dbApp.getId().equals(excludeId)) {
             throw new BusinessException(ResultCodeEnum.APP_CODE_EXIST_ERROR);
+        }
+    }
+
+    private void requireProject(Integer projectId) {
+        if (projectId == null) {
+            throw new BusinessException(ResultCodeEnum.PARAM_LOST_ERROR.code, "应用必须属于一个项目");
+        }
+        if (projectMapper.selectById(projectId) == null) {
+            throw new BusinessException(ResultCodeEnum.PROJECT_NOT_EXIST_ERROR);
         }
     }
 

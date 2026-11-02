@@ -76,7 +76,7 @@ public class DeployExecutionService {
         if (dbDeploy == null) {
             throw new BusinessException(ResultCodeEnum.DEPLOY_NOT_EXIST_ERROR);
         }
-        if (deployMapper.countOtherDeploying(dbDeploy.getAppId(), id) > 0) {
+        if (deployMapper.countOtherDeploying(dbDeploy.getAppId(), id, dbDeploy.getEnvCode()) > 0) {
             throw new BusinessException(ResultCodeEnum.DEPLOY_BUSY);
         }
         Deploy patch = new Deploy();
@@ -97,7 +97,7 @@ public class DeployExecutionService {
         if (dbDeploy == null) {
             throw new BusinessException(ResultCodeEnum.DEPLOY_NOT_EXIST_ERROR);
         }
-        if (deployMapper.countOtherDeploying(dbDeploy.getAppId(), id) > 0) {
+        if (deployMapper.countOtherDeploying(dbDeploy.getAppId(), id, dbDeploy.getEnvCode()) > 0) {
             throw new BusinessException(ResultCodeEnum.DEPLOY_BUSY);
         }
         deployService.rollback(id);
@@ -114,7 +114,7 @@ public class DeployExecutionService {
             for (DeployExecution row : running) {
                 txService.complete(row.getId(), "FAILED", null, cut("服务重启，执行中断", 500));
                 try {
-                    deployService.finishDeployAs(row.getDeployId(), DeployStatusEnum.FAILED.name(), "system");
+                    deployService.finishDeployAs(row.getDeployId(), DeployStatusEnum.FAILED.name(), null);
                 } catch (Exception e) {
                     log.warn("回收中断部署单失败 deployId={}", row.getDeployId());
                 }
@@ -261,7 +261,7 @@ public class DeployExecutionService {
             DeployLog row = new DeployLog();
             row.setDeployId(deployId);
             row.setAction("EXEC");
-            row.setOperator("system");
+            row.setOperator(null);
             row.setDetail(text);
             row.setLogType("EXEC");
             row.setSeq(seq);

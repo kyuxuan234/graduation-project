@@ -1,8 +1,10 @@
 package com.example.controller;
 
 import com.example.common.Result;
+import com.example.common.enums.RoleEnum;
 import com.example.entity.App;
 import com.example.service.AppService;
+import com.example.utils.AuthUtils;
 import com.github.pagehelper.PageInfo;
 import org.springframework.web.bind.annotation.*;
 import javax.annotation.Resource;
@@ -20,6 +22,7 @@ public class AppController {
 
     @PostMapping("/repoScript")
     public Result<String> repoScript(@RequestBody App app) {
+        AuthUtils.requireRole(RoleEnum.DEV, RoleEnum.OPS, RoleEnum.TL);
         return Result.success(appService.repoScript(app));
     }
 
@@ -28,6 +31,7 @@ public class AppController {
      */
     @PostMapping("/add")
     public Result<Void> add(@RequestBody App app) {
+        AuthUtils.requireRole(RoleEnum.DEV, RoleEnum.OPS);
         appService.add(app);
         return Result.success();
     }
@@ -37,6 +41,7 @@ public class AppController {
      */
     @DeleteMapping("/delete/{id}")
     public Result<Void> deleteById(@PathVariable Integer id) {
+        AuthUtils.requireRole(RoleEnum.DEV, RoleEnum.OPS);
         appService.deleteById(id);
         return Result.success();
     }
@@ -46,6 +51,7 @@ public class AppController {
      */
     @DeleteMapping("/delete/batch")
     public Result<Void> deleteBatch(@RequestBody List<Integer> ids) {
+        AuthUtils.requireRole(RoleEnum.DEV, RoleEnum.OPS);
         appService.deleteBatch(ids);
         return Result.success();
     }
@@ -55,6 +61,7 @@ public class AppController {
      */
     @PutMapping("/update")
     public Result<Void> updateById(@RequestBody App app) {
+        AuthUtils.requireRole(RoleEnum.DEV, RoleEnum.OPS);
         appService.updateById(app);
         return Result.success();
     }

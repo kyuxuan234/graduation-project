@@ -17,7 +17,7 @@
     </select>
 
     <select id="countOnlineApp" resultType="java.lang.Integer">
-        select count(*) from app where deleted = 0 and status = 'ONLINE'
+        select count(*) from app_instance where deleted = 0 and status = 'ONLINE'
     </select>
 
     <select id="countDeploy" resultType="java.lang.Integer">

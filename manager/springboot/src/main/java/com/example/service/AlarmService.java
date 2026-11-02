@@ -43,6 +43,7 @@ public class AlarmService {
         if (ObjectUtil.isEmpty(alarm.getAlarmNo())) {
             alarm.setAlarmNo(generateAlarmNo());
         }
+        normalizeLink(alarm);
         alarm.setStatus(AlarmStatusEnum.UNHANDLED.name());
         alarm.setHandler(null);
         alarm.setHandleTime(null);
@@ -80,11 +81,15 @@ public class AlarmService {
             if (text.length() > 500) {
                 text = text.substring(0, 500);
             }
+            if (appId == null && serverId == null) {
+                log.warn("自动告警未写入：未关联应用或部署环境");
+                return;
+            }
             Alarm alarm = new Alarm();
             alarm.setAlarmNo(generateAlarmNo());
             alarm.setAppId(appId);
             alarm.setServerId(serverId);
-            alarm.setDeployNo(deployNo);
+            alarm.setDeployNo(StrUtil.isBlank(deployNo) ? null : deployNo.trim());
             alarm.setLevel(level);
             alarm.setContent(text);
             alarm.setStatus(AlarmStatusEnum.UNHANDLED.name());
@@ -251,6 +256,20 @@ public class AlarmService {
         updateAlarm.setStatus(AlarmStatusEnum.RESOLVED.name());
         updateAlarm.setResolveTime(DateUtil.now());
         alarmMapper.updateById(updateAlarm);
+    }
+
+    /**
+     * 告警必须落到应用或部署环境。发布单号留空时不写外键。
+     */
+    private void normalizeLink(Alarm alarm) {
+        if (StrUtil.isBlank(alarm.getDeployNo())) {
+            alarm.setDeployNo(null);
+        } else {
+            alarm.setDeployNo(alarm.getDeployNo().trim());
+        }
+        if (alarm.getAppId() == null && alarm.getServerId() == null) {
+            throw new BusinessException(ResultCodeEnum.PARAM_LOST_ERROR.code, "告警须关联应用或部署环境");
+        }
     }
 
     /**

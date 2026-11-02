@@ -126,7 +126,7 @@ public class TokenUtils {
             HttpServletRequest request = ((ServletRequestAttributes) RequestContextHolder.getRequestAttributes()).getRequest();
             String token = request.getHeader(Constants.TOKEN);
             if (ObjectUtil.isNotEmpty(token)) {
-                Account account = loadAccount(token);
+                Account account = verifyToken(token);
                 if (account != null) {
                     return account;
                 }

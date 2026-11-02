@@ -17,6 +17,8 @@ public class Deploy implements Serializable {
     private Integer appId;
     /** 目标服务器id */
     private Integer serverId;
+    /** 提交时写入的目标环境 */
+    private String envCode;
     /** 目标版本 */
     private String version;
     /** 类型：FULL-全量 INCREMENT-增量 ROLLBACK-回滚 */
@@ -67,8 +69,10 @@ public class Deploy implements Serializable {
     private String startTime;
     /** 查询条件：申请时间范围-结束 */
     private String endTime;
-    /** 角色隔离：只看该申请人，精确匹配 */
+    /** 角色隔离：只看该申请人，或项目开发负责人是此人 */
     private String scopeApplicant;
+    /** 角色隔离：项目开发负责人姓名，兼容历史数据把姓名写在 leader 上 */
+    private String scopeLeader;
     /** 角色隔离：只看该环境 */
     private String scopeEnv;
     /** 角色隔离：只看这些状态 */
@@ -104,6 +108,14 @@ public class Deploy implements Serializable {
 
     public void setServerId(Integer serverId) {
         this.serverId = serverId;
+    }
+
+    public String getEnvCode() {
+        return envCode;
+    }
+
+    public void setEnvCode(String envCode) {
+        this.envCode = envCode;
     }
 
     public String getVersion() {
@@ -288,6 +300,14 @@ public class Deploy implements Serializable {
 
     public void setScopeApplicant(String scopeApplicant) {
         this.scopeApplicant = scopeApplicant;
+    }
+
+    public String getScopeLeader() {
+        return scopeLeader;
+    }
+
+    public void setScopeLeader(String scopeLeader) {
+        this.scopeLeader = scopeLeader;
     }
 
     public String getScopeEnv() {

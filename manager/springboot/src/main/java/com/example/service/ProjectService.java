@@ -1,12 +1,17 @@
 package com.example.service;
 
 import cn.hutool.core.util.ObjectUtil;
+import cn.hutool.core.util.StrUtil;
 import com.example.common.enums.ProjectStatusEnum;
 import com.example.common.enums.ResultCodeEnum;
+import com.example.common.enums.RoleEnum;
+import com.example.entity.Account;
+import com.example.entity.Person;
 import com.example.entity.Project;
 import com.example.exception.BusinessException;
 import com.example.mapper.AppMapper;
 import com.example.mapper.ProjectMapper;
+import com.example.utils.TokenUtils;
 import com.github.pagehelper.PageHelper;
 import com.github.pagehelper.PageInfo;
 import org.springframework.stereotype.Service;
@@ -26,13 +31,21 @@ public class ProjectService {
     @Resource
     private AppMapper appMapper;
 
+    @Resource
+    private PersonService personService;
+
     /**
-     * 新增
+     * 新增。开发负责人只能由技术负责人或超级管理员指定。
      */
     public void add(Project project) {
         checkCodeUnique(project.getCode(), null);
         if (ObjectUtil.isEmpty(project.getStatus())) {
             project.setStatus(ProjectStatusEnum.NOT_STARTED.name());
+        }
+        if (canAssignLeader()) {
+            project.setLeader(normalizeLeader(project.getLeader()));
+        } else {
+            project.setLeader(null);
         }
         projectMapper.insert(project);
     }
@@ -66,7 +79,7 @@ public class ProjectService {
     }
 
     /**
-     * 修改
+     * 修改。技术负责人只能改开发负责人，开发不能改这个字段。
      */
     public void updateById(Project project) {
         Project dbProject = projectMapper.selectById(project.getId());
@@ -76,8 +89,48 @@ public class ProjectService {
         if (ProjectStatusEnum.FINISHED.name().equals(dbProject.getStatus())) {
             throw new BusinessException(ResultCodeEnum.STATUS_LOCKED_ERROR);
         }
+        if (isTechnicalLead()) {
+            Project patch = new Project();
+            patch.setId(project.getId());
+            patch.setLeader(normalizeLeader(project.getLeader()));
+            projectMapper.updateById(patch);
+            return;
+        }
         checkCodeUnique(project.getCode(), project.getId());
+        if (canAssignLeader()) {
+            project.setLeader(normalizeLeader(project.getLeader()));
+        } else {
+            project.setLeader(dbProject.getLeader());
+        }
         projectMapper.updateById(project);
+    }
+
+    private boolean canAssignLeader() {
+        String role = currentRole();
+        return RoleEnum.ADMIN.name().equals(role) || RoleEnum.TL.name().equals(role);
+    }
+
+    private boolean isTechnicalLead() {
+        return RoleEnum.TL.name().equals(currentRole());
+    }
+
+    private String currentRole() {
+        Account current = TokenUtils.getCurrentUser();
+        return current == null ? null : current.getRole();
+    }
+
+    /**
+     * 空表示尚未分配。有值时必须是在职开发，并统一存用户名。
+     */
+    private String normalizeLeader(String leader) {
+        if (StrUtil.isBlank(leader)) {
+            return null;
+        }
+        Person person = personService.findActiveDeveloper(leader);
+        if (person == null) {
+            throw new BusinessException(ResultCodeEnum.PROJECT_LEADER_INVALID);
+        }
+        return person.getUsername();
     }
 
     /**

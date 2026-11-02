@@ -5,7 +5,7 @@
 <mapper namespace="com.example.mapper.DeployMapper">
 
     <sql id="Base_Column_List">
-        d.id,d.deploy_no,d.app_id,d.server_id,d.version,d.deploy_type,d.execute_mode,d.status,d.applicant,d.approver,
+        d.id,d.deploy_no,d.app_id,d.server_id,d.env_code,d.version,d.deploy_type,d.execute_mode,d.status,d.applicant,d.approver,
         d.apply_time,d.approve_time,d.finish_time,d.reason,d.remark,d.rollback_version,d.row_version,d.create_time,d.update_time,d.deleted
     </sql>
 
@@ -34,9 +34,25 @@
             <if test="status != null"> and d.status= #{status}</if>
             <if test="appId != null"> and d.app_id= #{appId}</if>
             <if test="serverId != null"> and d.server_id= #{serverId}</if>
+            <if test="envCode != null"> and d.env_code= #{envCode}</if>
             <if test="deployType != null"> and d.deploy_type= #{deployType}</if>
             <if test="applicant != null"> and d.applicant like concat('%', #{applicant}, '%')</if>
-            <if test="scopeApplicant != null and scopeApplicant != ''"> and d.applicant = #{scopeApplicant}</if>
+            <if test="scopeApplicant != null and scopeApplicant != ''">
+                and (
+                    d.applicant = #{scopeApplicant}
+                    or exists (
+                        select 1 from app leader_app
+                        inner join project leader_project on leader_project.id = leader_app.project_id and leader_project.deleted = 0
+                        where leader_app.deleted = 0 and leader_app.id = d.app_id
+                        and (
+                            leader_project.leader = #{scopeApplicant}
+                            <if test="scopeLeader != null and scopeLeader != ''">
+                                or leader_project.leader = #{scopeLeader}
+                            </if>
+                        )
+                    )
+                )
+            </if>
             <if test="scopeEnv != null and scopeEnv != ''"> and s.env = #{scopeEnv}</if>
             <if test="scopeStatuses != null and scopeStatuses.size() > 0">
                 and d.status in
@@ -75,6 +91,7 @@
                 <if test="deployNo != null">deploy_no,</if>
                 <if test="appId != null">app_id,</if>
                 <if test="serverId != null">server_id,</if>
+                <if test="envCode != null">env_code,</if>
                 <if test="version != null">version,</if>
                 <if test="deployType != null">deploy_type,</if>
                 <if test="executeMode != null">execute_mode,</if>
@@ -91,6 +108,7 @@
                 <if test="deployNo != null">#{deployNo},</if>
                 <if test="appId != null">#{appId},</if>
                 <if test="serverId != null">#{serverId},</if>
+                <if test="envCode != null">#{envCode},</if>
                 <if test="version != null">#{version},</if>
                 <if test="deployType != null">#{deployType},</if>
                 <if test="executeMode != null">#{executeMode},</if>
@@ -116,6 +134,9 @@
             </if>
             <if test="serverId != null">
                 server_id = #{serverId},
+            </if>
+            <if test="envCode != null">
+                env_code = #{envCode},
             </if>
             <if test="version != null">
                 version = #{version},
@@ -193,6 +214,7 @@
           and app_id = #{appId}
           and status = 'DEPLOYING'
           and id != #{excludeId}
+          <if test="envCode != null and envCode != ''">and env_code = #{envCode}</if>
     </select>
 
     <select id="selectLatestSuccessVersion" resultType="java.lang.String">
@@ -202,8 +224,40 @@
           and app_id = #{appId}
           and status = 'SUCCESS'
           and id != #{excludeId}
+          <if test="envCode != null and envCode != ''">and env_code = #{envCode}</if>
         order by finish_time desc, id desc
         limit 1
+    </select>
+
+    <select id="selectSuccessVersions" resultType="java.lang.String">
+        select distinct released_version
+        from (
+            select case
+                when deploy_type = 'ROLLBACK' and rollback_version is not null and rollback_version != ''
+                    then rollback_version
+                else version
+            end as released_version
+            from deploy
+            where deleted = 0
+              and app_id = #{appId}
+              and env_code = #{envCode}
+              and status = 'SUCCESS'
+        ) released
+        where released_version is not null and released_version != ''
+        order by released_version
+    </select>
+
+    <select id="countSuccessVersion" resultType="int">
+        select count(*)
+        from deploy
+        where deleted = 0
+          and app_id = #{appId}
+          and env_code = #{envCode}
+          and status = 'SUCCESS'
+          and (
+            (ifnull(deploy_type, '') != 'ROLLBACK' and version = #{version})
+            or (deploy_type = 'ROLLBACK' and rollback_version = #{version})
+          )
     </select>
 
     <select id="selectRecentForServer" resultType="com.example.entity.Deploy">

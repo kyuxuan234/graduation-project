@@ -11,13 +11,13 @@
         <el-select placeholder="请选择状态" style="width: 150px" v-model="params.status" clearable>
           <el-option v-for="item in statusOptions" :key="item.value" :label="item.label" :value="item.value"></el-option>
         </el-select>
-        <el-input prefix-icon="el-icon-user" placeholder="请输入负责人查询" style="width: 200px" v-model="params.leader" clearable></el-input>
+        <el-input prefix-icon="el-icon-user" placeholder="请输入开发负责人查询" style="width: 220px" v-model="params.leader" clearable></el-input>
         <el-button type="info" plain @click="load(1)" icon="el-icon-search">查询</el-button>
         <el-button type="warning" plain @click="reset" icon="el-icon-refresh-left">重置</el-button>
       </div>
       <div class="toolbar-actions">
-        <el-button type="primary" plain @click="handleAdd" icon="el-icon-plus">新增项目</el-button>
-        <el-button type="danger" plain @click="delBatch" icon="el-icon-delete">批量删除</el-button>
+        <el-button v-if="canMaintain" type="primary" plain @click="handleAdd" icon="el-icon-plus">新增项目</el-button>
+        <el-button v-if="canMaintain" type="danger" plain @click="delBatch" icon="el-icon-delete">批量删除</el-button>
       </div>
     </div>
 
@@ -27,7 +27,7 @@
         <el-table-column label="项目编号" width="140">
           <template slot="header"><span class="th-label"><i class="el-icon-postcard"></i>项目编号</span></template>
           <template v-slot="scope">
-            <span class="cell-text cell-code link-text" @click="goDown(scope.row)"><i class="el-icon-postcard"></i>{{ scope.row.code }}</span>
+            <span class="cell-text cell-code" :class="{ 'link-text': canOpenApps }" @click="canOpenApps && goDown(scope.row)"><i class="el-icon-postcard"></i>{{ scope.row.code }}</span>
           </template>
         </el-table-column>
         <el-table-column label="项目名" min-width="150" show-overflow-tooltip>
@@ -42,10 +42,10 @@
             <span class="cell-text"><i class="el-icon-cpu"></i><span class="txt">{{ scope.row.techStack || '-' }}</span></span>
           </template>
         </el-table-column>
-        <el-table-column label="负责人" width="160">
-          <template slot="header"><span class="th-label"><i class="el-icon-user"></i>负责人</span></template>
+        <el-table-column label="开发负责人" width="180">
+          <template slot="header"><span class="th-label"><i class="el-icon-user"></i>开发负责人</span></template>
           <template v-slot="scope">
-            <span class="cell-text"><i class="el-icon-user"></i>{{ personName(scope.row.leader) || '-' }}
+            <span class="cell-text"><i class="el-icon-user"></i>{{ personName(scope.row.leader) || '未分配' }}
               <el-tag v-if="personRoleName(scope.row.leader, scope.row.leaderRole)" size="mini" :type="roleTag(scope.row.leader, scope.row.leaderRole)">{{ personRoleName(scope.row.leader, scope.row.leaderRole) }}</el-tag>
             </span>
           </template>
@@ -53,7 +53,7 @@
         <el-table-column label="关联应用" width="110" align="center">
           <template slot="header"><span class="th-label"><i class="el-icon-connection"></i>关联应用</span></template>
           <template v-slot="scope">
-            <span class="cell-text link-text" @click="goApps(scope.row)"><i class="el-icon-s-platform"></i>{{ scope.row.appCount || 0 }} 个</span>
+            <span class="cell-text" :class="{ 'link-text': canOpenApps }" @click="canOpenApps && goApps(scope.row)"><i class="el-icon-s-platform"></i>{{ scope.row.appCount || 0 }} 个</span>
           </template>
         </el-table-column>
         <el-table-column label="状态" width="110" align="center">
@@ -85,7 +85,7 @@
           <template slot="header"><span class="th-label"><i class="el-icon-s-operation"></i>操作</span></template>
           <template v-slot="scope">
             <div class="op-btns">
-              <el-button v-if="canEdit(scope.row)" type="primary" size="mini" icon="el-icon-edit" title="编辑" @click="handleEdit(scope.row)">编辑</el-button>
+              <el-button v-if="canEdit(scope.row)" type="primary" size="mini" icon="el-icon-edit" :title="assignOnly ? '分配开发负责人' : '编辑'" @click="handleEdit(scope.row)">{{ assignOnly ? '分配' : '编辑' }}</el-button>
               <el-button v-else type="info" size="mini" icon="el-icon-view" title="查看" @click="handleView(scope.row)">查看</el-button>
               <el-button type="danger" size="mini" icon="el-icon-delete" title="删除" :disabled="!canDelete(scope.row)" @click="del(scope.row.id)">删除</el-button>
             </div>
@@ -106,35 +106,38 @@
       </div>
     </div>
 
-    <el-dialog :title="formReadonly ? '查看项目' : '项目信息'" :visible.sync="fromVisible" width="40%" :close-on-click-modal="false" destroy-on-close>
-      <el-form :model="form" label-width="100px" style="padding-right: 50px" :rules="rules" ref="formRef" :disabled="formReadonly">
+    <el-dialog :title="dialogTitle" :visible.sync="fromVisible" width="40%" :close-on-click-modal="false" destroy-on-close>
+      <el-form :model="form" label-width="110px" style="padding-right: 50px" :rules="rules" ref="formRef" :disabled="formReadonly">
         <el-form-item label="项目名" prop="name">
-          <el-input v-model="form.name" placeholder="项目名"></el-input>
+          <el-input v-model="form.name" placeholder="项目名" :disabled="assignOnly"></el-input>
         </el-form-item>
         <el-form-item label="项目编号" prop="code">
-          <el-input v-model="form.code" placeholder="项目编号"></el-input>
+          <el-input v-model="form.code" placeholder="项目编号" :disabled="assignOnly"></el-input>
         </el-form-item>
         <el-form-item label="技术栈" prop="techStack">
-          <el-input v-model="form.techStack" placeholder="技术栈"></el-input>
+          <el-input v-model="form.techStack" placeholder="技术栈" :disabled="assignOnly"></el-input>
         </el-form-item>
-        <el-form-item label="负责人" prop="leader">
-          <el-input v-model="form.leader" placeholder="负责人"></el-input>
+        <el-form-item label="开发负责人" prop="leader">
+          <el-select v-model="form.leader" placeholder="请选择开发人员" style="width: 100%" clearable :disabled="!canAssignLeader">
+            <el-option v-for="item in devList" :key="item.username" :label="item.name + '（' + item.username + '）'" :value="item.username"></el-option>
+          </el-select>
+          <div v-if="!canAssignLeader" class="field-tip">由技术负责人分配</div>
         </el-form-item>
         <el-form-item label="状态" prop="status">
-          <el-select v-model="form.status" placeholder="请选择状态" style="width: 100%">
+          <el-select v-model="form.status" placeholder="请选择状态" style="width: 100%" :disabled="assignOnly">
             <el-option v-for="item in statusOptions" :key="item.value" :label="item.label" :value="item.value"></el-option>
           </el-select>
         </el-form-item>
         <el-form-item label="开始日期" prop="startDate">
           <el-date-picker v-model="form.startDate" type="date" placeholder="请选择开始日期"
-                          value-format="yyyy-MM-dd" style="width: 100%"></el-date-picker>
+                          value-format="yyyy-MM-dd" style="width: 100%" :disabled="assignOnly"></el-date-picker>
         </el-form-item>
         <el-form-item label="结束日期" prop="endDate">
           <el-date-picker v-model="form.endDate" type="date" placeholder="请选择结束日期"
-                          value-format="yyyy-MM-dd" style="width: 100%"></el-date-picker>
+                          value-format="yyyy-MM-dd" style="width: 100%" :disabled="assignOnly"></el-date-picker>
         </el-form-item>
         <el-form-item label="描述" prop="description">
-          <el-input type="textarea" :rows="4" v-model="form.description" placeholder="描述"></el-input>
+          <el-input type="textarea" :rows="4" v-model="form.description" placeholder="描述" :disabled="assignOnly"></el-input>
         </el-form-item>
       </el-form>
       <div slot="footer" class="dialog-footer">
@@ -179,11 +182,32 @@ export default {
           {required: true, message: '请输入项目编号', trigger: 'blur'},
         ]
       },
-      ids: []
+      ids: [],
+      devList: [],
     }
+  },
+  computed: {
+    canMaintain() {
+      return this.user.role === 'ADMIN' || this.user.role === 'DEV'
+    },
+    assignOnly() {
+      return this.user.role === 'TL'
+    },
+    canAssignLeader() {
+      return this.user.role === 'ADMIN' || this.user.role === 'TL'
+    },
+    canOpenApps() {
+      return this.user.role === 'ADMIN' || this.user.role === 'DEV'
+    },
+    dialogTitle() {
+      if (this.formReadonly) return '查看项目'
+      if (this.assignOnly) return '分配开发负责人'
+      return '项目信息'
+    },
   },
   created() {
     this.applyQuery()
+    this.loadDevelopers()
     this.load(1)
   },
     watch: {
@@ -203,7 +227,20 @@ export default {
       return row.status !== 'FINISHED'
     },
     canDelete(row) {
+      if (this.assignOnly) return false
       return row.status !== 'FINISHED' && row.status !== 'PAUSED'
+    },
+    loadDevelopers() {
+      this.$request.get('/person/developers').then(res => {
+        this.devList = res.data || []
+        this.bindLeader()
+      })
+    },
+    bindLeader() {
+      const current = this.form.leader
+      if (!current) return
+      const found = this.devList.find(item => item.username === current || item.name === current)
+      if (found) this.form.leader = found.username
     },
     handleAdd() {   // 新增数据
       this.formReadonly = false
@@ -212,12 +249,14 @@ export default {
     },
     handleEdit(row) {   // 编辑数据
       this.formReadonly = false
-      this.form = JSON.parse(JSON.stringify(row))  // 给form对象赋值  注意要深拷贝数据
+      this.form = JSON.parse(JSON.stringify(row))
+      this.bindLeader()
       this.fromVisible = true   // 打开弹窗
     },
     handleView(row) {   // 已完结等不可改状态：只读查看
       this.formReadonly = true
       this.form = JSON.parse(JSON.stringify(row))
+      this.bindLeader()
       this.fromVisible = true
     },
     save() {   // 保存按钮触发的逻辑  它会触发新增或者更新
@@ -311,5 +350,10 @@ export default {
 </script>
 
 <style scoped>
-
+.field-tip {
+  margin-top: 4px;
+  font-size: 12px;
+  line-height: 1.4;
+  color: #909399;
+}
 </style>

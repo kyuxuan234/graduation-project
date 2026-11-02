@@ -35,7 +35,7 @@ export function buildInbox({ user, deploys = [], alarms = [] }) {
         tone: 'cyan',
         notifyType: 'info',
         title: '待你执行',
-        text: (row.appName || '应用') + '部署单 ' + row.deployNo + ' 已批准，请开始部署。',
+        text: (row.appName || '应用') + '发布单 ' + row.deployNo + ' 待执行，请开始发布。',
         path: '/deploy',
         query: { status: 'APPROVED' }
       }))
@@ -45,8 +45,8 @@ export function buildInbox({ user, deploys = [], alarms = [] }) {
         key: 'deploy-doing-' + row.id,
         tone: 'warn',
         notifyType: 'warning',
-        title: '部署中',
-        text: (row.appName || '应用') + '部署单 ' + row.deployNo + ' 正在部署，请回填结果。',
+        title: '发布中',
+        text: (row.appName || '应用') + '发布单 ' + row.deployNo + ' 正在发布，请回填结果。',
         path: '/deploy',
         query: { status: 'DEPLOYING' }
       }))
@@ -112,16 +112,16 @@ export function buildInbox({ user, deploys = [], alarms = [] }) {
           key: 'my-approved-' + row.id,
           tone: 'warn',
           notifyType: 'success',
-          title: '已批准',
-          text: '你的部署单 ' + row.deployNo + ' 已批准，等待运维执行。',
+          title: '待执行',
+          text: '你的发布单 ' + row.deployNo + ' 已通过审批，等待运维执行。',
           path: '/deploy',
           query: { status: 'APPROVED' }
         }))
       } else if (row.status === 'DEPLOYING') {
         items.push(item({
           key: 'my-doing-' + row.id,
-          title: '部署中',
-          text: '运维正在部署你的单 ' + row.deployNo + '。',
+          title: '发布中',
+          text: '运维正在发布你的单 ' + row.deployNo + '。',
           path: '/deploy',
           query: { status: 'DEPLOYING' }
         }))
@@ -131,7 +131,7 @@ export function buildInbox({ user, deploys = [], alarms = [] }) {
           tone: 'danger',
           notifyType: 'error',
           title: '已驳回',
-          text: '你的部署单 ' + row.deployNo + ' 已被驳回，请重新申请。',
+          text: '你的发布单 ' + row.deployNo + ' 已被驳回，请重新申请。',
           path: '/deploy',
           query: { status: 'REJECTED' }
         }))
@@ -141,7 +141,7 @@ export function buildInbox({ user, deploys = [], alarms = [] }) {
           tone: 'danger',
           notifyType: 'error',
           title: '发布失败',
-          text: '你的部署单 ' + row.deployNo + ' 发布失败。',
+          text: '你的发布单 ' + row.deployNo + ' 发布失败。',
           path: '/deploy',
           query: { status: 'FAILED' }
         }))
@@ -151,7 +151,7 @@ export function buildInbox({ user, deploys = [], alarms = [] }) {
     const gate = role === 'TL'
         ? { status: 'REVIEW', title: '待你审查', text: '请审查发布变更' }
         : role === 'QA'
-            ? { status: 'TESTING', title: '待你验收', text: '请做测试验收' }
+            ? { status: 'TESTING', title: '待你验收', text: '请验收测试环境的发布单' }
             : { status: 'ACCEPTING', title: '待你验收', text: '请做业务验收' }
     deploys.filter(row => row.status === gate.status).forEach(row => {
       items.push(item({

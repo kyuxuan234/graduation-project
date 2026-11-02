@@ -141,11 +141,11 @@ export default {
       user: JSON.parse(localStorage.getItem('xm-user') || '{}'),
       roleOptions: [
         { value: 'ADMIN', label: '超级管理员' },
-        { value: 'DEV', label: '开发' },
+        { value: 'DEV', label: '开发人员' },
         { value: 'TL', label: '技术负责人' },
-        { value: 'QA', label: '测试' },
+        { value: 'QA', label: '测试人员' },
         { value: 'PM', label: '产品经理' },
-        { value: 'OPS', label: '运维' },
+        { value: 'OPS', label: '运维人员' },
       ],
       statusOptions: [
         { value: 'ACTIVE', label: '正常' },

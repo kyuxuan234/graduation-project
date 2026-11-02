@@ -130,6 +130,49 @@ public class PersonService {
         return list;
     }
 
+    /**
+     * 供业务项目选择开发负责人。只返回在职开发，不含密码和联系方式。
+     */
+    public List<Person> listActiveDevelopers() {
+        Person query = new Person();
+        query.setRole(RoleEnum.DEV.name());
+        query.setStatus(AccountStatusEnum.ACTIVE.name());
+        List<Person> list = personMapper.selectAll(query);
+        for (Person item : list) {
+            item.setPassword(null);
+            item.setPhone(null);
+            item.setEmail(null);
+        }
+        return list;
+    }
+
+    /**
+     * 按用户名或姓名找到在职开发。历史数据里负责人存的是姓名。
+     */
+    public Person findActiveDeveloper(String leader) {
+        if (StrUtil.isBlank(leader)) {
+            return null;
+        }
+        String value = leader.trim();
+        Person byUsername = personMapper.selectByUsername(value);
+        if (isActiveDeveloper(byUsername)) {
+            return byUsername;
+        }
+        for (Person item : listActiveDevelopers()) {
+            if (value.equals(item.getUsername()) || value.equals(item.getName())) {
+                return item;
+            }
+        }
+        return null;
+    }
+
+    private boolean isActiveDeveloper(Person person) {
+        return person != null
+                && RoleEnum.DEV.name().equals(person.getRole())
+                && AccountStatusEnum.ACTIVE.name().equals(person.getStatus())
+                && (person.getDeleted() == null || person.getDeleted() == 0);
+    }
+
     public PageInfo<Person> selectPage(Person person, Integer pageNum, Integer pageSize) {
         PageHelper.startPage(pageNum, pageSize);
         List<Person> list = selectAll(person);

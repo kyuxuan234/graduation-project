@@ -1,5 +1,6 @@
 package com.example.utils;
 
+import cn.hutool.core.util.StrUtil;
 import com.example.common.enums.ResultCodeEnum;
 import com.example.common.enums.RoleEnum;
 import com.example.entity.Account;
@@ -16,6 +17,14 @@ public class AuthUtils {
     /**
      * 校验当前登录用户是否为指定角色之一，不满足则抛出无权限异常
      */
+    public static Account requireLogin() {
+        Account currentUser = TokenUtils.getCurrentUser();
+        if (currentUser == null || currentUser.getId() == null || StrUtil.isBlank(currentUser.getRole())) {
+            throw new BusinessException(ResultCodeEnum.USER_NOT_LOGIN);
+        }
+        return currentUser;
+    }
+
     public static Account requireRole(RoleEnum... roles) {
         return requireRole(ResultCodeEnum.NO_PERMISSION_ERROR, roles);
     }

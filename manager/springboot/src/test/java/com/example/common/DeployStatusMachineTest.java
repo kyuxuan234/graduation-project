@@ -53,7 +53,7 @@ class DeployStatusMachineTest {
 
     @Test
     void reviewGatesAdvanceInOrder() {
-        assertEquals(DeployStatusEnum.TESTING.name(),
+        assertEquals(DeployStatusEnum.ACCEPTING.name(),
                 DeployStatusMachine.passTarget(DeployStatusEnum.REVIEW.name(), ServerEnvEnum.PROD.name()));
         assertEquals(DeployStatusEnum.ACCEPTING.name(),
                 DeployStatusMachine.passTarget(DeployStatusEnum.TESTING.name(), ServerEnvEnum.PROD.name()));
@@ -67,10 +67,10 @@ class DeployStatusMachineTest {
     }
 
     @Test
-    void rollbackOnlyFromSuccess() {
-        DeployStatusMachine.assertRollback(DeployStatusEnum.SUCCESS.name());
+    void rollbackOnlyFromFailed() {
+        DeployStatusMachine.assertRollback(DeployStatusEnum.FAILED.name());
         BusinessException ex = assertThrows(BusinessException.class,
-                () -> DeployStatusMachine.assertRollback(DeployStatusEnum.FAILED.name()));
+                () -> DeployStatusMachine.assertRollback(DeployStatusEnum.SUCCESS.name()));
         assertEquals(ResultCodeEnum.DEPLOY_STATUS_ERROR.code, ex.getCode());
     }
 }

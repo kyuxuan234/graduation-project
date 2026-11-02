@@ -6,8 +6,10 @@
           <el-upload
               class="avatar-uploader"
               :action="$baseUrl + '/files/upload'"
+              :headers="uploadHeaders"
               :show-file-list="false"
               :on-success="handleAvatarSuccess"
+              :on-error="handleAvatarError"
           >
             <img v-if="user.avatar" :src="user.avatar" class="avatar" />
             <i v-else class="el-icon-plus avatar-uploader-icon"></i>
@@ -41,8 +43,11 @@ export default {
       user: JSON.parse(localStorage.getItem('xm-user') || '{}')
     }
   },
-  created() {
-
+  computed: {
+    uploadHeaders() {
+      const user = JSON.parse(localStorage.getItem('xm-user') || '{}')
+      return { token: user.token || '' }
+    }
   },
   methods: {
     update() {
@@ -62,9 +67,15 @@ export default {
         }
       })
     },
-    handleAvatarSuccess(response, file, fileList) {
-      // 把user的头像属性换成上传的图片的链接
+    handleAvatarSuccess(response) {
+      if (!response || response.code !== '200' || !response.data) {
+        this.$message.error((response && response.msg) || '头像上传失败')
+        return
+      }
       this.$set(this.user, 'avatar', response.data)
+    },
+    handleAvatarError() {
+      this.$message.error('头像上传失败')
     },
   }
 }

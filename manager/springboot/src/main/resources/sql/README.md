@@ -15,17 +15,31 @@
 
 ## 已有库：清空业务数据并重灌演示集
 
-人员账号（`person`）不动，只重建公告、项目、服务器、应用、部署、日志、执行、制品、告警时：
+人员账号（`person`）不动，只重建公告、项目、服务器、应用、部署、日志、执行、告警时：
 
 ```sql
 SOURCE demo_seed.sql;
 ```
 
-`demo_seed.sql` 会 `TRUNCATE` 上述业务表后写入与 `data.sql` 一致的演示集（覆盖审批/自动与手动部署/失败回滚/告警闭环等场景；部署与告警时间用相对今天的日期，保证「发布分析」近 7/30 天曲线有密度）。结构须已含 SSH、`execute_mode` 等列（新库用 `schema.sql`；旧库先跑下文升级脚本）。需要重新生成种子时，可运行同目录 `_gen_demo_seed.py`。
+`demo_seed.sql` 会 `TRUNCATE` 上述业务表后写入与 `data.sql` 一致的演示集（覆盖审查验收、运维审批、自动与手动部署、失败回滚、告警闭环；部署与告警时间用相对今天的日期，保证「发布分析」近 7/30 天曲线有密度）。结构须已含 SSH、`execute_mode` 等列（新库用 `schema.sql`；旧库先跑下文升级脚本）。
+
+`data.sql` 与 `demo_seed.sql` 由 `_gen_demo_seed.py` 生成。生成器写出 `person` 单表和角色账号。要改演示数据，改生成器再运行；不要在生成器之外改完 SQL 又重跑，否则手改会被覆盖。
+
+## 真实虚机实验室（清空历史单据）
+
+三台 CentOS：`hadoop101/102/103`（`192.168.116.131/132/133`），SSH `kang/centos7`，部署目录 `/opt/module`。
+
+```sql
+SOURCE lab_real_vm.sql;
+```
+
+会清空发布单、告警与演示服务器，写入上述三台主机及应用实例；人员账号保留。虚机目录可用 `_prep_real_vms.py` 检查并创建 `/opt/module`。
 
 ## 已有库升级
 
-下面 4 个脚本针对**已经存在的旧库**。按顺序手工执行。每一条执行前都先备份。
+下面的脚本只给**还没合并人员表的旧库**用。按顺序手工执行。每一条执行前都先备份。
+
+步骤 1（`upgrade_admin.sql`）和步骤 3（`upgrade_password.sql`）会改 `admin` / `dev` / `ops`。库里已经只有 `person` 时再跑会报 1146，应跳过。步骤 11 会删除这三张旧表，不可逆。
 
 | 顺序 | 文件 | 做什么 | 执行前 |
 |---|---|---|---|
@@ -62,8 +76,9 @@ SOURCE upgrade_fk.sql;
 | 6 | `upgrade_deploy_log.sql` | 给 `deploy_log` 补 `log_type`、`seq`、`source`，把 `detail` 扩到 1024，并加 `(deploy_id, log_type, seq)` 索引 | 只改 `deploy_log` |
 | 7 | `upgrade_deploy_version.sql` | 给 `deploy` 补 `rollback_version` 和乐观锁 `row_version`。`version` 仍是发布版本号 | 只改 `deploy` |
 | 8 | `upgrade_deploy_execution.sql` | 新建 `deploy_execution`，外键指向 `deploy.id` | 先有 `deploy` |
-| 9 | `upgrade_deploy_artifact.sql` | 新建 `deploy_artifact`，外键指向 `app.id` | 先有 `app` |
+| 9 | `upgrade_deploy_artifact.sql` | 删除已废弃的 `deploy_artifact`（若存在）。发布已改为按仓库地址拉取版本 | 可单独执行 |
 | 10 | `upgrade_deploy_execute_mode.sql` | 给 `deploy` 补 `execute_mode`，已有行默认 `AUTO` | 只改 `deploy` |
 | 11 | `upgrade_person.sql` | 把 `admin` / `dev` / `ops` 合并进 `person` 后删除旧表。用户名冲突时保留已写入的 `person` 行 | 旧三张表还在时才搬数据。人员主键会重排，已登录 token 需重新登录 |
+| 12 | `upgrade_relation.sql` | 人员用户名、公告发布人、发布单号收成外键；应用必须属于项目，发布单必须有应用和目标环境，流转记录必须属于发布单 | 先有 `person.username` 唯一约束和已有的 7 条外键。对不上的负责人、操作人、单号会被清空后再加约束 |
 
 全新安装用 `schema.sql` 即可，这些升级脚本不要再跑。

@@ -17,41 +17,62 @@
                 <path d="M3 12h4l3 8 4-16 3 8h4"></path>
               </svg>
             </div>
-            <div>DevOps 发布管理系统<small>RELEASE & OPS</small></div>
+            <div>DevOps 发布管理系统<small>公司项目发布</small></div>
           </div>
-          <div class="live"><i></i>系统在线</div>
+          <div class="live"><i></i>内部使用</div>
         </div>
 
         <div class="main">
           <div class="side">
-            <h2>按发布链路管控<br><span>项目 → 应用 → 部署 → 告警</span></h2>
-            <p>开发提交发布申请，运维审批并自动或手动执行；探活与告警在同一控制台闭环。</p>
-            <div class="tags">
-              <span>发布申请</span>
-              <span>审批执行</span>
-              <span>自动部署</span>
-              <span>告警闭环</span>
+            <h2>发布链路<br><span class="chain">项目 → 应用 → 环境 → 发布单</span></h2>
+            <div class="flow" aria-label="发布流程">
+              <div class="flow-head" :class="{ on: hit('submit') }"><span class="node start" :class="{ on: hit('submit') }">开发提交</span></div>
+              <div class="fork" :class="{ 'to-dev': hit('dev'), 'to-test': hit('test'), 'to-prod': hit('prod'), stem: hit('submit') }"></div>
+              <div class="lanes">
+                <div class="lane" :class="{ on: hit('dev') }">
+                  <div class="env">开发环境</div>
+                  <div class="steps" :class="{ lit: hit('dev-run') }">
+                    <span class="node" :class="{ on: hit('dev-ops'), link: link('dev-ops', 'dev-run') }">运维审批</span>
+                  </div>
+                  <span class="node end" :class="{ on: hit('dev-run') }">执行</span>
+                </div>
+                <div class="lane" :class="{ on: hit('test') }">
+                  <div class="env">测试环境</div>
+                  <div class="steps" :class="{ lit: hit('test-run') }">
+                    <span class="node" :class="{ on: hit('test-qa'), link: link('test-qa', 'test-ops') }">测试验收</span>
+                    <span class="node" :class="{ on: hit('test-ops'), link: link('test-ops', 'test-run') }">运维审批</span>
+                  </div>
+                  <span class="node end" :class="{ on: hit('test-run') }">执行</span>
+                </div>
+                <div class="lane" :class="{ on: hit('prod') }">
+                  <div class="env">生产环境</div>
+                  <div class="steps" :class="{ lit: hit('prod-run') }">
+                    <span class="node" :class="{ on: hit('prod-tl'), link: link('prod-tl', 'prod-pm') }">技术审查</span>
+                    <span class="node" :class="{ on: hit('prod-pm'), link: link('prod-pm', 'prod-ops') }">产品验收</span>
+                    <span class="node" :class="{ on: hit('prod-ops'), link: link('prod-ops', 'prod-run') }">运维审批</span>
+                  </div>
+                  <span class="node end" :class="{ on: hit('prod-run') }">执行</span>
+                </div>
+              </div>
             </div>
-            <div class="stats">
-              <div class="stat"><b>3</b><em>角色协同</em></div>
-              <div class="stat"><b>2</b><em>执行方式</em></div>
-              <div class="stat"><b>1</b><em>发布看板</em></div>
-            </div>
+            <p class="duty">{{ roleDuty }}</p>
           </div>
 
           <div class="form-box">
-            <h1>欢迎登录</h1>
-            <div class="sub">当前身份：{{ roleName }}，请输入账号信息</div>
+            <h1>登录发布平台</h1>
+            <div class="sub">按岗位登录，左侧会标出你负责的环节</div>
 
-            <div class="roles">
-              <button v-for="item in roles" :key="item.value" type="button" class="role" :class="{ active: role === item.value }" @click="pickRole(item)">
-                {{ item.name }}
-              </button>
+            <label class="label" for="login-role">当前身份</label>
+            <div class="field select-field">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4z"></path><path d="M4 20c1.2-3.2 4-5 8-5s6.8 1.8 8 5"></path></svg>
+              <select id="login-role" v-model="role" @change="applyRole">
+                <option v-for="item in roles" :key="item.value" :value="item.value">{{ item.name }}</option>
+              </select>
             </div>
 
             <div class="field">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"></circle><path d="M4 21c0-4 4-6 8-6s8 2 8 6"></path></svg>
-              <input v-model="form.username" placeholder="用户名 / 手机号" @keyup.enter="login">
+              <input v-model="form.username" placeholder="用户名" @keyup.enter="login">
             </div>
             <div class="field">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="10" width="16" height="11" rx="2"></rect><path d="M8 10V7a4 4 0 0 1 8 0v3"></path></svg>
@@ -66,7 +87,7 @@
 
             <button class="btn" type="button" :disabled="loading" @click="login">{{ loading ? '登录中…' : '登 录' }}</button>
             <div class="foot">
-              演示账号：<b>{{ demoText }}</b>
+              岗位账号：<b>{{ demoText }}</b>
               <span> · </span>
               <router-link to="/register">注册账号</router-link>
             </div>
@@ -79,13 +100,22 @@
 
 <script>
 const ROLES = [
-  { value: 'ADMIN', name: '超级管理员', username: 'admin', password: 'admin', text: 'admin / admin' },
-  { value: 'DEV', name: '开发', username: 'dev1', password: '123456', text: 'dev1 / 123456' },
-  { value: 'TL', name: '技术负责人', username: 'tl1', password: '123456', text: 'tl1 / 123456' },
-  { value: 'QA', name: '测试', username: 'qa1', password: '123456', text: 'qa1 / 123456' },
-  { value: 'PM', name: '产品经理', username: 'pm1', password: '123456', text: 'pm1 / 123456' },
-  { value: 'OPS', name: '运维', username: 'ops1', password: '123456', text: 'ops1 / 123456' },
+  { value: 'ADMIN', name: '超级管理员', username: 'admin', password: 'admin', text: 'admin / admin', duty: '查看项目、服务器、应用、发布单和告警的全部进度。' },
+  { value: 'DEV', name: '开发人员', username: 'dev1', password: '123456', text: 'dev1 / 123456', duty: '提交发布申请。开发环境直接交运维，测试环境先测试验收，生产环境先技术审查和产品验收。' },
+  { value: 'TL', name: '技术负责人', username: 'tl1', password: '123456', text: 'tl1 / 123456', duty: '审查生产发布，通过后进入产品验收；并在业务项目中分配开发负责人。' },
+  { value: 'QA', name: '测试人员', username: 'qa1', password: '123456', text: 'qa1 / 123456', duty: '验收测试环境的发布单，通过后交给运维审批并执行。' },
+  { value: 'PM', name: '产品经理', username: 'pm1', password: '123456', text: 'pm1 / 123456', duty: '验收生产环境中已通过技术审查的发布单，通过后交给运维。' },
+  { value: 'OPS', name: '运维人员', username: 'ops1', password: '123456', text: 'ops1 / 123456', duty: '审批并执行各环境已完成前置环节的发布，接手发布告警。' },
 ]
+
+const ROLE_PATH = {
+  ADMIN: ['submit', 'dev', 'dev-ops', 'dev-run', 'test', 'test-qa', 'test-ops', 'test-run', 'prod', 'prod-tl', 'prod-pm', 'prod-ops', 'prod-run'],
+  DEV: ['submit', 'dev', 'test', 'prod'],
+  TL: ['submit', 'prod', 'prod-tl'],
+  QA: ['submit', 'test', 'test-qa'],
+  PM: ['submit', 'prod', 'prod-tl', 'prod-pm'],
+  OPS: ['dev', 'dev-ops', 'dev-run', 'test', 'test-ops', 'test-run', 'prod', 'prod-ops', 'prod-run'],
+}
 
 export default {
   name: "Login",
@@ -100,14 +130,17 @@ export default {
     }
   },
   computed: {
-    roleName() {
-      const item = ROLES.find(v => v.value === this.role)
-      return item ? item.name : ''
-    },
     demoText() {
       const item = ROLES.find(v => v.value === this.role)
       return item ? item.text : ''
-    }
+    },
+    activePath() {
+      return ROLE_PATH[this.role] || []
+    },
+    roleDuty() {
+      const item = ROLES.find(v => v.value === this.role)
+      return item ? item.duty : ''
+    },
   },
   created() {
     const savedRole = localStorage.getItem('xm-login-role')
@@ -123,8 +156,15 @@ export default {
     if (savedUser) this.remember = true
   },
   methods: {
-    pickRole(item) {
-      this.role = item.value
+    hit(key) {
+      return this.activePath.indexOf(key) >= 0
+    },
+    link(from, to) {
+      return this.hit(from) && this.hit(to)
+    },
+    applyRole() {
+      const item = ROLES.find(v => v.value === this.role)
+      if (!item) return
       this.form.username = item.username
       this.form.password = item.password
     },
@@ -329,59 +369,141 @@ export default {
   letter-spacing: .3px;
 }
 .side h2 span {
+  display: block;
+  margin-top: 8px;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0;
+  line-height: 1.45;
   background: linear-gradient(135deg, #2ee6c8, #e8c36a);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
 }
-.side p {
-  color: #7ea8a4;
-  margin-top: 10px;
-  font-size: 13px;
-  line-height: 1.7;
+.flow { margin-top: 16px; }
+.flow-head { text-align: center; }
+.flow-head::after {
+  content: "";
+  display: block;
+  width: 1px;
+  height: 10px;
+  margin: 0 auto;
+  background: rgba(46, 230, 200, .2);
 }
-
-.tags {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-top: 14px;
+.flow-head.on::after { background: rgba(46, 230, 200, .9); }
+.node {
+  display: block;
+  text-align: center;
+  font-size: 12px;
+  line-height: 1.2;
+  padding: 6px 4px;
+  border-radius: 8px;
+  color: #e6f4f2;
+  background: rgba(46, 230, 200, .1);
+  border: 1px solid rgba(46, 230, 200, .22);
+  opacity: .38;
+  transition: opacity .2s, box-shadow .2s, border-color .2s;
 }
-.tags span {
-  font-size: 11px;
-  color: #9ed8d0;
-  padding: 4px 8px;
-  border-radius: 999px;
-  background: rgba(46, 230, 200, .08);
-  border: 1px solid rgba(46, 230, 200, .14);
+.node.on {
+  opacity: 1;
+  border-color: rgba(46, 230, 200, .75);
+  box-shadow: 0 0 14px rgba(46, 230, 200, .28);
 }
-
-.stats {
+.node.start {
+  display: inline-block;
+  min-width: 96px;
+  padding: 7px 18px;
+  font-weight: 700;
+  background: linear-gradient(135deg, rgba(46, 230, 200, .22), rgba(61, 139, 255, .2));
+}
+.fork {
+  height: 14px;
+  margin: 0 16.6% 0;
+  border-top: 1px solid rgba(46, 230, 200, .2);
+  border-left: 1px solid rgba(46, 230, 200, .2);
+  border-right: 1px solid rgba(46, 230, 200, .2);
+  position: relative;
+}
+.fork.stem { border-top-color: rgba(46, 230, 200, .9); }
+.fork.to-dev { border-left-color: rgba(46, 230, 200, .9); }
+.fork.to-prod { border-right-color: rgba(46, 230, 200, .9); }
+.fork::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 0;
+  bottom: 0;
+  border-left: 1px solid rgba(46, 230, 200, .2);
+}
+.fork.to-test::before { border-left-color: rgba(46, 230, 200, .9); }
+.lanes {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 8px;
-  margin-top: 16px;
 }
-.stat {
-  padding: 10px 8px;
-  border-radius: 10px;
+.lane {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px 6px;
+  border-radius: 12px;
   background: rgba(3, 16, 18, .35);
-  border: 1px solid rgba(90, 190, 180, .12);
+  border: 1px solid rgba(90, 190, 180, .14);
+}
+.lane.on {
+  border-color: rgba(46, 230, 200, .5);
+  background: rgba(46, 230, 200, .06);
+}
+.env {
   text-align: center;
+  font-size: 12px;
+  font-weight: 700;
+  color: #e8c36a;
+  opacity: .4;
+  transition: opacity .2s;
 }
-.stat b {
-  display: block;
-  font-size: 20px;
-  font-weight: 800;
-  color: #2ee6c8;
-  line-height: 1;
+.lane.on .env { opacity: 1; }
+.steps {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  flex: 1;
 }
-.stat em {
-  display: block;
-  margin-top: 5px;
-  font-style: normal;
-  font-size: 11px;
-  color: #7ea8a4;
+.steps .node { position: relative; }
+.steps .node:not(:last-child)::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: -11px;
+  border-left: 4px solid transparent;
+  border-right: 4px solid transparent;
+  border-top: 5px solid rgba(46, 230, 200, .25);
+  transform: translateX(-50%);
+}
+.steps .node.link::after { border-top-color: #2ee6c8; }
+.steps::after {
+  content: "";
+  width: 1px;
+  flex: 1;
+  min-height: 12px;
+  margin: 2px auto 0;
+  background: rgba(46, 230, 200, .2);
+}
+.steps.lit::after { background: rgba(46, 230, 200, .9); }
+.node.end.on { box-shadow: 0 0 16px rgba(46, 230, 200, .4); }
+.node.end {
+  margin-top: auto;
+  color: #041114;
+  font-weight: 700;
+  background: linear-gradient(135deg, #2ee6c8, #3d8bff);
+  border-color: transparent;
+}
+
+.duty {
+  margin: 14px 0 0;
+  color: #9ed8d0;
+  font-size: 13px;
+  line-height: 1.7;
 }
 
 .form-box {
@@ -390,35 +512,39 @@ export default {
 
 h1 { font-size: 20px; font-weight: 700; margin-bottom: 4px; color: #e6f4f2; }
 .sub { color: #7ea8a4; font-size: 12px; margin-bottom: 14px; }
-
-.roles {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-bottom: 14px;
-  background: rgba(3, 16, 18, .55);
-  padding: 4px;
-  border-radius: 11px;
-  border: 1px solid rgba(90, 190, 180, .14);
+.label {
+  display: block;
+  margin: 0 2px 6px;
+  font-size: 12px;
+  color: #9ed8d0;
 }
 
-.role {
-  flex: 1 1 30%;
-  text-align: center;
-  padding: 8px 4px;
-  font-size: 13px;
-  border-radius: 8px;
+.field select {
+  width: 100%;
+  appearance: none;
+  -webkit-appearance: none;
+  padding: 11px 36px 11px 38px;
+  font-size: 14px;
+  color: #e6f4f2;
+  background: rgba(3, 16, 18, .62);
+  border: 1px solid rgba(90, 190, 180, .16);
+  border-radius: 10px;
+  outline: none;
   cursor: pointer;
-  color: #7ea8a4;
-  transition: .22s;
-  background: transparent;
-  border: none;
 }
-.role.active {
-  color: #041114;
-  font-weight: 600;
-  background: linear-gradient(135deg, #2ee6c8, #3d8bff);
-  box-shadow: 0 6px 16px rgba(46, 230, 200, .28);
+.field select:focus { border-color: #2ee6c8; box-shadow: 0 0 0 3px rgba(46, 230, 200, .14); }
+.field select option { color: #041114; background: #f4fbfa; }
+.select-field::after {
+  content: "";
+  position: absolute;
+  right: 14px;
+  top: 50%;
+  width: 7px;
+  height: 7px;
+  border-right: 1.5px solid #8ec8c2;
+  border-bottom: 1.5px solid #8ec8c2;
+  transform: translateY(-70%) rotate(45deg);
+  pointer-events: none;
 }
 
 .field { position: relative; margin-bottom: 10px; color: #8ec8c2; }

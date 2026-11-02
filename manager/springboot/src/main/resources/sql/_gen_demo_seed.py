@@ -64,6 +64,10 @@ SHOWCASE = [
     (0, 10, 2, 6, "v2.1.1", "INCREMENT", "AUTO", "PENDING", "dev1", None, "订单金额精度修复", "等待运维审批", None),
     # deploying manual
     (0, 16, 3, 3, "v1.9.5", "INCREMENT", "MANUAL", "DEPLOYING", "dev2", "ops2", "门户热修文案", "已进入手动部署", None),
+    # 生产待技术审查 / 测试环境待测试验收 / 生产待产品验收
+    (0, 11, 1, 5, "v2.4.0", "FULL", "AUTO", "REVIEW", "dev1", None, "交易服务生产发布", "等待技术负责人审查", None),
+    (0, 12, 3, 3, "v1.9.6", "INCREMENT", "AUTO", "TESTING", "dev2", None, "门户回归", "等待测试验收", None),
+    (0, 13, 2, 6, "v2.1.2", "INCREMENT", "AUTO", "ACCEPTING", "dev1", "tl1", "订单生产验收", "等待产品验收", None),
 ]
 
 ALARM_DAYS = [
@@ -105,9 +109,17 @@ KEYWORD_DETAIL = {
     "exception": "[auto] Uncaught exception: NullPointerException in AuthFilter",
     "failed": "[auto] deploy failed: health check returned non-200",
     "timeout": "[auto] gateway timeout while calling upstream / exceed max-timeout",
-    "denied": "[auto] Permission denied writing /opt/apps/releases",
+    "denied": "[auto] Permission denied writing /opt/module/releases",
     "refused": "[auto] connection refused by app port 8084",
 }
+
+# 历史种子里的旧 server_id → 三台真实虚机
+# 1/2 开发 → hadoop101；3/4 测试 → hadoop102；5/6/7 生产 → hadoop103
+SRV_MAP = {1: 1, 2: 1, 3: 2, 4: 2, 5: 3, 6: 3, 7: 3}
+
+
+def map_srv(old):
+    return SRV_MAP.get(old, 3)
 
 
 def ts(day_ago, hour, minute=0):
@@ -126,57 +138,62 @@ def build_business_body():
     lines.append("-- 系统公告（展示产品价值与操作主线）")
     lines.append("-- ----------------------------")
     lines.append("INSERT INTO `notice` (`id`, `title`, `content`, `time`, `user`) VALUES")
-    lines.append("(1, '发布闭环已就绪', '请按 项目→应用→部署单→告警 追溯。开发提交申请，运维审批后可选自动部署（SSH）或手动终端。', DATE_FORMAT(CURDATE(), '%Y-%m-%d'), 'admin'),")
-    lines.append("(2, '今天演示看什么', '① 待审批单（运维 inbox）② 部署中进度与执行日志 ③ 失败单与回滚成功单 ④ 发布分析：成败趋势/失败分布/错误 TOP/告警走势。', DATE_FORMAT(CURDATE(), '%Y-%m-%d'), 'admin'),")
-    lines.append("(3, '账号与注意', 'admin/admin、dev1/123456、ops1/123456。SSH 已开通的服务器显示「已开通」；自动部署需制品。', DATE_FORMAT(CURDATE(), '%Y-%m-%d'), 'admin');")
+    lines.append("(1, '发布闭环已就绪', '开发按目标环境提交发布单：开发环境直接交运维，测试环境先测试验收，生产环境经技术审查和产品验收后再交运维。通过后可自动拉取仓库代码，或开手动终端。', DATE_FORMAT(CURDATE(), '%Y-%m-%d'), 'admin'),")
+    lines.append("(2, '今天演示看什么', '① 生产待技术审查、测试待验收、生产待产品验收 ② 运维待审批与部署中 ③ 失败单与回滚成功单 ④ 发布报表。', DATE_FORMAT(CURDATE(), '%Y-%m-%d'), 'admin'),")
+    lines.append("(3, '账号与注意', 'admin/admin，dev1、tl1、qa1、pm1、ops1 密码均为 123456。自动部署按应用上的仓库地址在目标机拉取对应版本。', DATE_FORMAT(CURDATE(), '%Y-%m-%d'), 'admin');")
     lines.append("")
     lines.append("-- ----------------------------")
     lines.append("-- 项目：4 种状态全覆盖")
     lines.append("-- ----------------------------")
     lines.append("""INSERT INTO `project` (`id`, `name`, `code`, `tech_stack`, `leader`, `status`, `start_date`, `end_date`, `description`) VALUES
-(1, '电商交易平台', 'PRJ-001', 'Spring Boot + Vue2 + MySQL + Redis', '张伟', 'IN_PROGRESS', DATE_SUB(CURDATE(), INTERVAL 180 DAY), DATE_ADD(CURDATE(), INTERVAL 90 DAY), '核心交易链路，演示全量/增量/回滚与生产发布'),
-(2, '统一用户中心', 'PRJ-002', 'Spring Boot + JWT + Redis', '李娜', 'IN_PROGRESS', DATE_SUB(CURDATE(), INTERVAL 200 DAY), DATE_ADD(CURDATE(), INTERVAL 60 DAY), '认证与用户服务，演示失败发布与配置类告警'),
-(3, '经营数据大屏', 'PRJ-003', 'Vue2 + ECharts + Nginx', '王强', 'FINISHED', DATE_SUB(CURDATE(), INTERVAL 400 DAY), DATE_SUB(CURDATE(), INTERVAL 200 DAY), '已交付项目，演示稳定在线与历史成功单'),
-(4, '移动端网关', 'PRJ-004', 'Spring Cloud Gateway', '赵敏', 'PAUSED', DATE_SUB(CURDATE(), INTERVAL 150 DAY), DATE_ADD(CURDATE(), INTERVAL 120 DAY), '需求调整暂停，演示 APPROVED 等待窗口'),
-(5, '智能探活平台', 'PRJ-005', 'Spring Boot + 探活', '张伟', 'NOT_STARTED', DATE_ADD(CURDATE(), INTERVAL 10 DAY), DATE_ADD(CURDATE(), INTERVAL 180 DAY), '尚未启动，演示 PENDING 初版申请');""")
+(1, '电商交易平台', 'PRJ-001', 'Spring Boot + Vue2 + MySQL + Redis', 'dev1', 'IN_PROGRESS', DATE_SUB(CURDATE(), INTERVAL 180 DAY), DATE_ADD(CURDATE(), INTERVAL 90 DAY), '核心交易链路，演示全量/增量/回滚与生产发布'),
+(2, '统一用户中心', 'PRJ-002', 'Spring Boot + JWT + Redis', 'dev2', 'IN_PROGRESS', DATE_SUB(CURDATE(), INTERVAL 200 DAY), DATE_ADD(CURDATE(), INTERVAL 60 DAY), '认证与用户服务，演示失败发布与配置类告警'),
+(3, '经营数据大屏', 'PRJ-003', 'Vue2 + ECharts + Nginx', 'dev1', 'FINISHED', DATE_SUB(CURDATE(), INTERVAL 400 DAY), DATE_SUB(CURDATE(), INTERVAL 200 DAY), '已交付项目，演示稳定在线与历史成功单'),
+(4, '移动端网关', 'PRJ-004', 'Spring Cloud Gateway', 'dev2', 'PAUSED', DATE_SUB(CURDATE(), INTERVAL 150 DAY), DATE_ADD(CURDATE(), INTERVAL 120 DAY), '需求调整暂停，演示 APPROVED 等待窗口'),
+(5, '智能探活平台', 'PRJ-005', 'Spring Boot + 探活', 'dev1', 'NOT_STARTED', DATE_ADD(CURDATE(), INTERVAL 10 DAY), DATE_ADD(CURDATE(), INTERVAL 180 DAY), '尚未启动，演示 PENDING 初版申请');""")
     lines.append("")
     lines.append("-- ----------------------------")
-    lines.append("-- 服务器：DEV/TEST/PROD + RUNNING/STOPPED/MAINTENANCE + KEY/PASSWORD")
+    lines.append("-- 运行环境")
+    lines.append("-- ----------------------------")
+    lines.append("""INSERT IGNORE INTO `environment` (`id`, `code`, `name`, `sort_no`, `remark`) VALUES
+(1, 'DEV', '开发环境', 1, 'hadoop101'),
+(2, 'TEST', '测试环境', 2, 'hadoop102'),
+(3, 'PROD', '生产环境', 3, 'hadoop103');""")
+    lines.append("")
+    lines.append("-- ----------------------------")
+    lines.append("-- 服务器：三台真实 CentOS 虚机（kang/centos7，/opt/module）")
     lines.append("-- ----------------------------")
     lines.append("""INSERT INTO `server` (`id`, `hostname`, `ip`, `os`, `cpu`, `memory`, `disk`, `env`, `status`, `remark`,
                       `ssh_port`, `ssh_user`, `ssh_auth_type`, `ssh_password`, `ssh_private_key`, `deploy_path`) VALUES
-(1, 'app-dev-01',  '192.168.10.11', 'CentOS 7.9',  '4',  '8GB',  '100GB', 'DEV',  'RUNNING',     '开发联调主节点', 22, 'deploy', 'KEY',      NULL, NULL, '/opt/apps'),
-(2, 'app-dev-02',  '192.168.10.12', 'Ubuntu 22.04','4',  '8GB',  '100GB', 'DEV',  'STOPPED',     '开发备用机未启用', 22, 'deploy', 'PASSWORD', NULL, NULL, '/opt/apps'),
-(3, 'app-test-01', '192.168.20.11', 'CentOS 7.9',  '8',  '16GB', '200GB', 'TEST', 'RUNNING',     '回归测试机', 22, 'deploy', 'KEY',      NULL, NULL, '/opt/apps'),
-(4, 'app-test-02', '192.168.20.12', 'Ubuntu 22.04','8',  '16GB', '200GB', 'TEST', 'MAINTENANCE', '内核升级维护中', 22, 'deploy', 'PASSWORD', NULL, NULL, '/opt/apps'),
-(5, 'app-prod-01', '10.0.1.11',     'CentOS 7.9',  '16', '32GB', '500GB', 'PROD', 'RUNNING',     '生产主节点', 22, 'deploy', 'KEY',      NULL, NULL, '/opt/apps'),
-(6, 'app-prod-02', '10.0.1.12',     'CentOS 7.9',  '16', '32GB', '500GB', 'PROD', 'RUNNING',     '生产从节点', 22, 'deploy', 'KEY',      NULL, NULL, '/opt/apps'),
-(7, 'ops-jump-01', '10.0.1.5',      'Ubuntu 22.04','2',  '4GB',  '50GB',  'PROD', 'RUNNING',     '跳板机（待开通密钥）', 22, 'ops', 'PASSWORD', NULL, NULL, '/opt/jump');""")
+(1, 'hadoop101', '192.168.116.131', 'CentOS 7', '4', '8GB', '100GB', 'DEV',  'RUNNING', '开发环境虚机', 22, 'kang', 'PASSWORD', 'centos7', NULL, '/opt/module'),
+(2, 'hadoop102', '192.168.116.132', 'CentOS 7', '4', '8GB', '100GB', 'TEST', 'RUNNING', '测试环境虚机', 22, 'kang', 'PASSWORD', 'centos7', NULL, '/opt/module'),
+(3, 'hadoop103', '192.168.116.133', 'CentOS 7', '4', '8GB', '100GB', 'PROD', 'RUNNING', '生产环境虚机', 22, 'kang', 'PASSWORD', 'centos7', NULL, '/opt/module');""")
     lines.append("")
     lines.append("-- ----------------------------")
-    lines.append("-- 应用：ONLINE / DEPLOYING / OFFLINE")
+    lines.append("-- 应用（版本与在线状态在 app_instance）")
     lines.append("-- ----------------------------")
-    lines.append("""INSERT INTO `app` (`id`, `name`, `code`, `project_id`, `server_id`, `port`, `version`, `tech_stack`, `repo_url`, `status`) VALUES
-(1, '交易服务',     'APP-001', 1, 5, 8081, 'v2.3.1', 'Spring Boot + Redis',     'http://git.example.com/shop/trade.git',   'ONLINE'),
-(2, '订单服务',     'APP-002', 1, 6, 8082, 'v2.1.0', 'Spring Boot + MQ',        'http://git.example.com/shop/order.git',   'ONLINE'),
-(3, '商城门户',     'APP-003', 1, 3, 8080, 'v1.9.4', 'Vue2 + Nginx',            'http://git.example.com/shop/portal.git',  'ONLINE'),
-(4, '统一认证',     'APP-004', 2, 5, 8083, 'v1.5.1', 'Spring Boot + JWT',       'http://git.example.com/uc/auth.git',      'OFFLINE'),
-(5, '用户中心',     'APP-005', 2, 1, 8084, 'v1.4.0', 'Spring Boot + MySQL',     'http://git.example.com/uc/user.git',      'OFFLINE'),
-(6, '经营大屏',     'APP-006', 3, 3, 8085, 'v1.0.6', 'Vue2 + ECharts',          'http://git.example.com/bi/dash.git',      'ONLINE'),
-(7, '移动网关',     'APP-007', 4, 1, 8086, 'v0.9.1', 'Spring Cloud Gateway',    'http://git.example.com/app/gateway.git',  'DEPLOYING'),
-(8, '探活采集',     'APP-008', 5, 4, 8087, 'v0.1.0', 'Spring Boot',             'http://git.example.com/ops/agent.git',    'OFFLINE');""")
+    lines.append("""INSERT INTO `app` (`id`, `name`, `code`, `project_id`, `tech_stack`, `repo_url`) VALUES
+(1, '交易服务', 'APP-001', 1, 'Spring Boot + Redis', 'https://github.com/spring-projects/spring-petclinic.git'),
+(2, '订单服务', 'APP-002', 1, 'Spring Boot + MQ', 'https://github.com/spring-projects/spring-petclinic.git'),
+(3, '商城门户', 'APP-003', 1, 'Vue2 + Nginx', 'https://github.com/spring-projects/spring-petclinic.git'),
+(4, '统一认证', 'APP-004', 2, 'Spring Boot + JWT', 'https://github.com/spring-projects/spring-petclinic.git'),
+(5, '用户中心', 'APP-005', 2, 'Spring Boot + MySQL', 'https://github.com/spring-projects/spring-petclinic.git'),
+(6, '经营大屏', 'APP-006', 3, 'Vue2 + ECharts', 'https://github.com/spring-projects/spring-petclinic.git'),
+(7, '移动网关', 'APP-007', 4, 'Spring Cloud Gateway', 'https://github.com/spring-projects/spring-petclinic.git'),
+(8, '探活采集', 'APP-008', 5, 'Spring Boot', 'https://github.com/spring-projects/spring-petclinic.git');""")
     lines.append("")
-    lines.append("-- ----------------------------")
-    lines.append("-- 制品（自动部署依赖）")
-    lines.append("-- ----------------------------")
-    lines.append("""INSERT INTO `deploy_artifact` (`id`, `app_id`, `version`, `file_name`, `file_path`, `file_size`, `md5`, `uploader`) VALUES
-(1, 1, 'v2.3.1', 'trade-v2.3.1.jar', '/data/artifacts/trade-v2.3.1.jar', 52428800, 'a1b2c3d4e5f60718293a4b5c6d7e8f90', 'dev1'),
-(2, 1, 'v2.3.0', 'trade-v2.3.0.jar', '/data/artifacts/trade-v2.3.0.jar', 51380224, 'b2c3d4e5f60718293a4b5c6d7e8f90a1', 'dev1'),
-(3, 2, 'v2.1.0', 'order-v2.1.0.jar', '/data/artifacts/order-v2.1.0.jar', 41943040, 'c3d4e5f60718293a4b5c6d7e8f90a1b2', 'dev1'),
-(4, 2, 'v2.1.1', 'order-v2.1.1.jar', '/data/artifacts/order-v2.1.1.jar', 42000000, 'd4e5f60718293a4b5c6d7e8f90a1b2c3', 'dev1'),
-(5, 4, 'v1.5.2', 'auth-v1.5.2.jar',  '/data/artifacts/auth-v1.5.2.jar',  31457280, 'e5f60718293a4b5c6d7e8f90a1b2c3d4', 'dev2'),
-(6, 7, 'v0.9.1', 'gateway-v0.9.1.jar','/data/artifacts/gateway-v0.9.1.jar',20971520, 'f60718293a4b5c6d7e8f90a1b2c3d4e5', 'dev1'),
-(7, 6, 'v1.0.6', 'dash-v1.0.6.zip',  '/data/artifacts/dash-v1.0.6.zip',  8388608, '018293a4b5c6d7e8f90a1b2c3d4e5f60', 'dev2');""")
+    lines.append("-- 应用实例挂到三台虚机")
+    lines.append("""INSERT INTO `app_instance` (`id`, `app_id`, `env_code`, `server_id`, `port`, `version`, `status`) VALUES
+(1, 1, 'PROD', 3, 8081, 'v2.3.1', 'ONLINE'),
+(2, 1, 'DEV', 1, 8081, NULL, 'OFFLINE'),
+(3, 1, 'TEST', 2, 8081, NULL, 'OFFLINE'),
+(4, 2, 'PROD', 3, 8082, 'v2.1.0', 'ONLINE'),
+(5, 3, 'TEST', 2, 8080, 'v1.9.4', 'ONLINE'),
+(6, 4, 'PROD', 3, 8083, 'v1.5.1', 'OFFLINE'),
+(7, 5, 'DEV', 1, 8084, 'v1.4.0', 'OFFLINE'),
+(8, 6, 'TEST', 2, 8085, 'v1.0.6', 'ONLINE'),
+(9, 7, 'DEV', 1, 8086, 'v0.9.1', 'DEPLOYING'),
+(10, 8, 'TEST', 2, 8087, 'v0.1.0', 'OFFLINE');""")
     lines.append("")
     lines.append("-- ----------------------------")
     lines.append("-- 部署单：近 30 天成败密度 + 现场状态单（分析页 / 列表页都能看出价值）")
@@ -193,6 +210,7 @@ def build_business_body():
         approve_t = ts(day, hour, 15)
         finish_t = ts(day, hour, 40)
         deploy_no = f"DP-H{did:03d}"
+        srv = map_srv(srv)
         deploy_rows.append(
             f"({did}, '{deploy_no}', {app}, {srv}, '{ver}', '{dtype}', '{mode}', '{status}', "
             f"{sql_str(applicant)}, {sql_str(approver)}, {apply_t}, {approve_t}, {finish_t}, "
@@ -202,10 +220,18 @@ def build_business_body():
 
     for day, hour, app, srv, ver, dtype, mode, status, applicant, approver, reason, remark, rb in SHOWCASE:
         apply_t = ts(day, hour)
-        approve_t = "NULL" if status == "PENDING" else ts(day, hour, 15)
+        approve_t = "NULL" if status in ("PENDING", "REVIEW", "TESTING") else ts(day, hour, 15)
         finish_t = "NULL"
-        row_v = 0 if status == "PENDING" else (2 if status in ("APPROVED", "DEPLOYING", "REJECTED") else 3)
+        if status in ("PENDING", "REVIEW", "TESTING"):
+            row_v = 0
+        elif status == "ACCEPTING":
+            row_v = 1
+        elif status in ("APPROVED", "DEPLOYING", "REJECTED"):
+            row_v = 2
+        else:
+            row_v = 3
         deploy_no = f"DP-L{did:03d}"
+        srv = map_srv(srv)
         deploy_rows.append(
             f"({did}, '{deploy_no}', {app}, {srv}, '{ver}', '{dtype}', '{mode}', '{status}', "
             f"{sql_str(applicant)}, {sql_str(approver)}, {apply_t}, {approve_t}, {finish_t}, "
@@ -271,13 +297,13 @@ def build_business_body():
             action = "ROLLBACK" if dtype == "ROLLBACK" else "FINISH"
             log_rows.append(f"({lid}, {i}, '{action}', {sql_str(approver)}, {sql_str(remark or '完成')}, 'STATE', 0, 'AUTO', {t3})")
             lid += 1
-            log_rows.append(f"({lid}, {i}, 'EXEC', 'system', '[auto] deploy ok md5 verified', 'EXEC', 1, 'AUTO', {t3})")
+            log_rows.append(f"({lid}, {i}, 'EXEC', NULL, '[auto] deploy ok md5 verified', 'EXEC', 1, 'AUTO', {t3})")
             lid += 1
         else:
             log_rows.append(f"({lid}, {i}, 'FAIL', {sql_str(approver)}, {sql_str(remark or '失败')}, 'STATE', 0, 'AUTO', {t3})")
             lid += 1
             detail = KEYWORD_DETAIL[kw]
-            log_rows.append(f"({lid}, {i}, 'EXEC', 'system', {sql_str(detail)}, 'EXEC', 1, 'AUTO', {t3})")
+            log_rows.append(f"({lid}, {i}, 'EXEC', NULL, {sql_str(detail)}, 'EXEC', 1, 'AUTO', {t3})")
             lid += 1
             # second keyword line for density on some failures
             if kw in ("error", "timeout", "exception"):
@@ -286,7 +312,7 @@ def build_business_body():
                     "timeout": "[auto] health check timeout after 60s",
                     "exception": "[auto] nested exception is BindException",
                 }[kw]
-                log_rows.append(f"({lid}, {i}, 'EXEC', 'system', {sql_str(extra)}, 'EXEC', 2, 'AUTO', {t3})")
+                log_rows.append(f"({lid}, {i}, 'EXEC', NULL, {sql_str(extra)}, 'EXEC', 2, 'AUTO', {t3})")
                 lid += 1
 
     for idx, sc in enumerate(SHOWCASE):
@@ -295,9 +321,13 @@ def build_business_body():
         t0 = ts(day, hour)
         log_rows.append(f"({lid}, {did_sc}, 'APPLY', {sql_str(applicant)}, {sql_str('提交 ' + reason)}, 'STATE', 0, 'MANUAL', {t0})")
         lid += 1
-        if status == "PENDING":
+        if status in ("PENDING", "REVIEW", "TESTING"):
             continue
         t1 = ts(day, hour, 15)
+        if status == "ACCEPTING":
+            log_rows.append(f"({lid}, {did_sc}, 'APPROVE', {sql_str(approver)}, '技术审查通过', 'STATE', 0, 'MANUAL', {t1})")
+            lid += 1
+            continue
         if status == "REJECTED":
             log_rows.append(f"({lid}, {did_sc}, 'REJECT', {sql_str(approver)}, {sql_str(remark)}, 'STATE', 0, 'MANUAL', {t1})")
             lid += 1
@@ -308,7 +338,7 @@ def build_business_body():
             t2 = ts(day, hour, 20)
             log_rows.append(f"({lid}, {did_sc}, 'START_DEPLOY', {sql_str(approver)}, '部署进行中', 'STATE', 0, 'MANUAL', {t2})")
             lid += 1
-            log_rows.append(f"({lid}, {did_sc}, 'EXEC', 'system', '[auto] uploading artifact ...', 'EXEC', 1, 'AUTO', {t2})")
+            log_rows.append(f"({lid}, {did_sc}, 'EXEC', NULL, '[auto] fetching repository ...', 'EXEC', 1, 'AUTO', {t2})")
             lid += 1
 
     lines.append(",\n".join(log_rows) + ";")
@@ -328,6 +358,7 @@ def build_business_body():
             ht = ts(day, hour, 20)
         if status == "RESOLVED":
             rt = ts(day, hour, 50)
+        srv = map_srv(srv)
         alarm_rows.append(
             f"({i}, 'AL-D{i:03d}', {app}, {srv}, {sql_str(dno)}, '{level}', {sql_str(content)}, '{status}', "
             f"{sql_str(handler)}, {ht}, {rt}, {ct})"
@@ -341,14 +372,13 @@ def build_business_body():
     lines.append("ALTER TABLE `deploy` AUTO_INCREMENT = 200;")
     lines.append("ALTER TABLE `deploy_log` AUTO_INCREMENT = 2000;")
     lines.append("ALTER TABLE `deploy_execution` AUTO_INCREMENT = 200;")
-    lines.append("ALTER TABLE `deploy_artifact` AUTO_INCREMENT = 100;")
     lines.append("ALTER TABLE `alarm` AUTO_INCREMENT = 200;")
     lines.append("ALTER TABLE `notice` AUTO_INCREMENT = 100;")
     return "\n".join(lines)
 
 
 SEED_HEADER = """-- ============================================================
--- 演示数据重置：保留人员账号（admin/dev/ops），清空并重建业务数据
+-- 演示数据重置：保留人员账号（person），清空并重建业务数据
 -- 用法：在已有 schema（含 SSH / execute_mode 等列）的 manager 库执行
 -- 日期用 CURDATE()/DATE_SUB，刷新后「发布分析」近 7/30 天曲线仍有密度
 -- ============================================================
@@ -356,10 +386,10 @@ SET NAMES utf8mb4;
 SET FOREIGN_KEY_CHECKS = 0;
 
 TRUNCATE TABLE `deploy_execution`;
-TRUNCATE TABLE `deploy_artifact`;
 TRUNCATE TABLE `deploy_log`;
 TRUNCATE TABLE `alarm`;
 TRUNCATE TABLE `deploy`;
+TRUNCATE TABLE `app_instance`;
 TRUNCATE TABLE `app`;
 TRUNCATE TABLE `server`;
 TRUNCATE TABLE `project`;
@@ -374,7 +404,7 @@ DATA_HEADER = """-- ============================================================
 -- 目标库：manager（请先执行 schema.sql）
 -- 说明：
 --   1. 人员账号保留为演示账号；业务表覆盖各模块全状态，便于答辩展示
---   2. 密码为 MD5(明文 + 盐值)，盐值与 Constants.PASSWORD_SALT 一致
+--   2. 演示密码为 MD5(明文 + 盐值)，盐值与 Constants.PASSWORD_SALT 一致；登录同时兼容 BCrypt
 --   3. 已有库仅重置业务数据时，用同目录 demo_seed.sql（会 TRUNCATE 业务表，不动人员）
 --   4. 部署/告警时间用相对今天的表达式，保证「发布分析」近 7/30 天有曲线
 -- ============================================================
@@ -382,24 +412,17 @@ DATA_HEADER = """-- ============================================================
 SET NAMES utf8mb4;
 
 -- ----------------------------
--- 0. 超级管理员（登录：admin / admin）
+-- 0. 人员（登录：admin/admin，其余 123456）
 -- ----------------------------
-INSERT INTO `admin` (`id`, `username`, `password`, `name`, `phone`, `email`, `role`, `status`) VALUES
-(1, 'admin', MD5(CONCAT('admin', 'devops_salt_2026')), '超级管理员', '13677889922', 'admin@xm.com', 'ADMIN', 'ACTIVE');
-
--- ----------------------------
--- 1. 开发人员（2条）
--- ----------------------------
-INSERT INTO `dev` (`id`, `username`, `password`, `name`, `phone`, `email`, `status`) VALUES
-(1, 'dev1', MD5(CONCAT('123456', 'devops_salt_2026')), '张伟', '13800010001', 'dev1@devops.com', 'ACTIVE'),
-(2, 'dev2', MD5(CONCAT('123456', 'devops_salt_2026')), '李娜', '13800010002', 'dev2@devops.com', 'ACTIVE');
-
--- ----------------------------
--- 2. 运维人员（2条）
--- ----------------------------
-INSERT INTO `ops` (`id`, `username`, `password`, `name`, `phone`, `email`, `status`) VALUES
-(1, 'ops1', MD5(CONCAT('123456', 'devops_salt_2026')), '王强', '13900020001', 'ops1@devops.com', 'ACTIVE'),
-(2, 'ops2', MD5(CONCAT('123456', 'devops_salt_2026')), '赵敏', '13900020002', 'ops2@devops.com', 'ACTIVE');
+INSERT INTO `person` (`id`, `username`, `password`, `name`, `phone`, `email`, `role`, `status`) VALUES
+(1, 'admin', MD5(CONCAT('admin', 'devops_salt_2026')), '超级管理员', '13677889922', 'admin@xm.com', 'ADMIN', 'ACTIVE'),
+(2, 'dev1', MD5(CONCAT('123456', 'devops_salt_2026')), '张伟', '13800010001', 'dev1@devops.com', 'DEV', 'ACTIVE'),
+(3, 'dev2', MD5(CONCAT('123456', 'devops_salt_2026')), '李娜', '13800010002', 'dev2@devops.com', 'DEV', 'ACTIVE'),
+(4, 'tl1', MD5(CONCAT('123456', 'devops_salt_2026')), '陈磊', '13700030001', 'tl1@devops.com', 'TL', 'ACTIVE'),
+(5, 'qa1', MD5(CONCAT('123456', 'devops_salt_2026')), '周婷', '13700030002', 'qa1@devops.com', 'QA', 'ACTIVE'),
+(6, 'pm1', MD5(CONCAT('123456', 'devops_salt_2026')), '孙悦', '13700030003', 'pm1@devops.com', 'PM', 'ACTIVE'),
+(7, 'ops1', MD5(CONCAT('123456', 'devops_salt_2026')), '王强', '13900020001', 'ops1@devops.com', 'OPS', 'ACTIVE'),
+(8, 'ops2', MD5(CONCAT('123456', 'devops_salt_2026')), '赵敏', '13900020002', 'ops2@devops.com', 'OPS', 'ACTIVE');
 
 """
 

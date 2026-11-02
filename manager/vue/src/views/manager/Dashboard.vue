@@ -142,17 +142,18 @@
 import * as echarts from 'echarts'
 import OsLogo from '@/components/OsLogo'
 import { canOps } from '@/utils/person'
+import { DEPLOY_STATUS_NAME } from '@/utils/deployStatus'
 
 const DEPLOY_STATUS = [
-  { value: 'REVIEW', name: '待技术审查', tone: 'warn', icon: 'el-icon-view' },
-  { value: 'TESTING', name: '待测试验收', tone: 'warn', icon: 'el-icon-s-check' },
-  { value: 'ACCEPTING', name: '待产品验收', tone: 'warn', icon: 'el-icon-s-claim' },
-  { value: 'PENDING', name: '待运维审批', tone: 'warn', icon: 'el-icon-time' },
-  { value: 'APPROVED', name: '已批准', tone: 'cyan', icon: 'el-icon-check' },
-  { value: 'DEPLOYING', name: '部署中', tone: 'cyan', icon: 'el-icon-loading' },
-  { value: 'SUCCESS', name: '已交付', tone: 'ok', icon: 'el-icon-circle-check' },
-  { value: 'FAILED', name: '发布失败', tone: 'danger', icon: 'el-icon-circle-close' },
-  { value: 'REJECTED', name: '已驳回', tone: '', icon: 'el-icon-close' },
+  { value: 'REVIEW', name: DEPLOY_STATUS_NAME.REVIEW, tone: 'warn', icon: 'el-icon-view' },
+  { value: 'TESTING', name: DEPLOY_STATUS_NAME.TESTING, tone: 'warn', icon: 'el-icon-s-check' },
+  { value: 'ACCEPTING', name: DEPLOY_STATUS_NAME.ACCEPTING, tone: 'warn', icon: 'el-icon-s-claim' },
+  { value: 'PENDING', name: DEPLOY_STATUS_NAME.PENDING, tone: 'warn', icon: 'el-icon-time' },
+  { value: 'APPROVED', name: DEPLOY_STATUS_NAME.APPROVED, tone: 'cyan', icon: 'el-icon-check' },
+  { value: 'DEPLOYING', name: DEPLOY_STATUS_NAME.DEPLOYING, tone: 'cyan', icon: 'el-icon-loading' },
+  { value: 'SUCCESS', name: DEPLOY_STATUS_NAME.SUCCESS, tone: 'ok', icon: 'el-icon-circle-check' },
+  { value: 'FAILED', name: DEPLOY_STATUS_NAME.FAILED, tone: 'danger', icon: 'el-icon-circle-close' },
+  { value: 'REJECTED', name: DEPLOY_STATUS_NAME.REJECTED, tone: '', icon: 'el-icon-close' },
 ]
 const ALARM_STATUS = [
   { value: 'UNHANDLED', name: '未处理', tone: 'danger', icon: 'el-icon-bell' },
@@ -223,10 +224,10 @@ export default {
           items.push({ tone: 'danger', icon: 'el-icon-close', label: '已驳回', text: '你的部署单 ' + rejected.deployNo + ' 已被驳回，请重新申请。', path: '/deploy', query: { status: 'REJECTED' } })
         }
         if (failedMine) {
-          items.push({ tone: 'danger', icon: 'el-icon-circle-close', label: '失败', text: '你的部署单 ' + failedMine.deployNo + ' 发布失败。', path: '/deploy', query: { status: 'FAILED' } })
+          items.push({ tone: 'danger', icon: 'el-icon-circle-close', label: '发布失败', text: '你的发布单 ' + failedMine.deployNo + ' 发布失败。', path: '/deploy', query: { status: 'FAILED' } })
         }
         if (approved) {
-          items.push({ tone: 'warn', icon: 'el-icon-check', label: '已批准', text: '你的部署单 ' + approved.deployNo + ' 已批准，等待运维执行。', path: '/deploy', query: { status: 'APPROVED' } })
+          items.push({ tone: 'warn', icon: 'el-icon-check', label: '待执行', text: '你的发布单 ' + approved.deployNo + ' 已通过审批，等待运维执行。', path: '/deploy', query: { status: 'APPROVED' } })
         }
         if (pendingMine) {
           items.push({ tone: 'cyan', icon: 'el-icon-time', label: '审批中', text: '你的部署单 ' + pendingMine.deployNo + ' 正在等待运维审批。', path: '/deploy', query: { status: 'PENDING' } })
@@ -240,7 +241,7 @@ export default {
         }
       }
       if (failed && role !== 'DEV') {
-        items.push({ tone: 'danger', icon: 'el-icon-circle-close', label: '失败', text: '发布失败 ' + failed + ' 张，相关应用风险升高。', path: '/deploy', query: { status: 'FAILED' } })
+        items.push({ tone: 'danger', icon: 'el-icon-circle-close', label: '发布失败', text: '发布失败 ' + failed + ' 张，相关应用风险升高。', path: '/deploy', query: { status: 'FAILED' } })
       }
       if (highRisk) {
         items.push({ tone: 'warn', icon: 'el-icon-aim', label: '风险', text: '高风险应用 ' + highRisk + ' 个，请查看应用变更与风险。' })
@@ -264,10 +265,10 @@ export default {
     },
     roleTip() {
       const map = {
-        DEV: '开发环境提交后直接等运维；测试环境先由测试验收；生产环境依次经过技术审查、测试验收和产品验收',
-        TL: '你只处理生产环境的技术审查，通过后进入测试验收',
-        QA: '测试环境验收通过后交给运维；生产环境验收通过后交给产品经理',
-        PM: '你只处理生产环境、且测试已通过的发布单',
+        DEV: '开发环境提交后直接等运维；测试环境先由测试验收；生产环境经过技术审查和产品验收',
+        TL: '你只处理生产环境的技术审查，通过后进入产品验收',
+        QA: '你只验收测试环境的发布单，通过后交给运维',
+        PM: '你只处理生产环境中技术审查已通过的发布单',
         OPS: '各环境完成本环境要求的审查验收后，由你审批并执行',
         ADMIN: '全流程可见：项目 / 服务器 / 应用 / 部署 / 告警 / 人员'
       }
@@ -324,8 +325,8 @@ export default {
         this.$message.info('服务器由运维管理，开发可在应用中选择部署机')
         return
       }
-      if (path === '/project' && this.user.role !== 'DEV' && this.user.role !== 'ADMIN') {
-        this.$message.info('业务项目由开发维护')
+      if (path === '/project' && this.user.role !== 'DEV' && this.user.role !== 'TL' && this.user.role !== 'ADMIN') {
+        this.$message.info('业务项目由开发维护，开发负责人由技术负责人分配')
         return
       }
       this.$router.push(query ? { path, query } : path)
@@ -454,7 +455,7 @@ export default {
         if (row.projectId) projectIds[row.projectId] = true
       })
       const projectCount = role === 'DEV' ? projects.length : Object.keys(projectIds).length
-      const onlineAppCount = appList.filter(row => row.status === 'ONLINE').length
+      const onlineAppCount = appList.reduce((sum, row) => sum + (row.onlineCount || 0), 0)
       const alarmCountMap = { UNHANDLED: 0, HANDLING: 0, RESOLVED: 0 }
       ;(alarms || []).forEach(row => {
         if (alarmCountMap[row.status] != null) alarmCountMap[row.status] += 1

@@ -16,7 +16,7 @@ public class Project implements Serializable {
     private String code;
     /** 技术栈 */
     private String techStack;
-    /** 负责人 */
+    /** 开发负责人，存开发人员用户名 */
     private String leader;
     /** 状态：NOT_STARTED-未开始 IN_PROGRESS-进行中 PAUSED-已暂停 FINISHED-已完结 */
     private String status;
@@ -35,7 +35,7 @@ public class Project implements Serializable {
 
     /** 联查字段：该项目下的应用数 */
     private Integer appCount;
-    /** 联查字段：负责人角色 */
+    /** 联查字段：开发负责人角色 */
     private String leaderRole;
 
     public Integer getId() {

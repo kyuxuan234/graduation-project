@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.mapper.AppInstanceMapper">
+
+    <sql id="Cols">
+        i.id, i.app_id, i.env_code, i.server_id, i.port, i.version, i.status,
+        i.create_time, i.update_time, i.deleted,
+        a.name as app_name, a.code as app_code,
+        s.hostname as server_name, e.name as env_name
+    </sql>
+
+    <sql id="Join">
+        from app_instance i
+        left join app a on i.app_id = a.id and a.deleted = 0
+        left join server s on i.server_id = s.id and s.deleted = 0
+        left join environment e on i.env_code = e.code and e.deleted = 0
+    </sql>
+
+    <insert id="insert" parameterType="com.example.entity.AppInstance" useGeneratedKeys="true" keyProperty="id">
+        insert into app_instance (app_id, env_code, server_id, port, version, status)
+        values (#{appId}, #{envCode}, #{serverId}, #{port}, #{version}, #{status})
+    </insert>
+
+    <update id="updateById" parameterType="com.example.entity.AppInstance">
+        update app_instance
+        <set>
+            <if test="serverId != null">server_id = #{serverId},</if>
+            <if test="port != null">port = #{port},</if>
+            <if test="version != null">version = #{version},</if>
+            <if test="status != null">status = #{status},</if>
+        </set>
+        where id = #{id} and deleted = 0
+    </update>
+
+    <select id="selectById" resultType="com.example.entity.AppInstance">
+        select <include refid="Cols"/> <include refid="Join"/>
+        where i.id = #{id} and i.deleted = 0
+    </select>
+
+    <select id="selectByAppAndEnv" resultType="com.example.entity.AppInstance">
+        select <include refid="Cols"/> <include refid="Join"/>
+        where i.app_id = #{appId} and i.env_code = #{envCode} and i.deleted = 0
+    </select>
+
+    <select id="selectByAppId" resultType="com.example.entity.AppInstance">
+        select <include refid="Cols"/> <include refid="Join"/>
+        where i.app_id = #{appId} and i.deleted = 0
+        order by e.sort_no, i.id
+    </select>
+
+    <select id="selectOnline" resultType="com.example.entity.AppInstance">
+        select <include refid="Cols"/> <include refid="Join"/>
+        where i.deleted = 0 and i.status = 'ONLINE'
+    </select>
+
+    <select id="countByServerId" resultType="int">
+        select count(*) from app_instance where server_id = #{serverId} and deleted = 0
+    </select>
+
+    <select id="countOnlineByAppId" resultType="int">
+        select count(*) from app_instance where app_id = #{appId} and deleted = 0 and status = 'ONLINE'
+    </select>
+
+    <update id="deleteByAppId">
+        update app_instance set deleted = 1 where app_id = #{appId} and deleted = 0
+    </update>
+</mapper>

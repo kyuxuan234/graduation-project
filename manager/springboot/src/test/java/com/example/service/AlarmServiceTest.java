@@ -46,6 +46,7 @@ class AlarmServiceTest {
     @Test
     void add_insertsAndNotifies() {
         Alarm alarm = new Alarm();
+        alarm.setServerId(1);
         alarm.setContent("CPU 过高");
         alarm.setLevel("CRITICAL");
 

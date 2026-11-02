@@ -17,15 +17,19 @@ import com.example.dto.DeployExecSummaryVO;
 import com.example.dto.DeployLogLinesVO;
 import com.example.entity.Account;
 import com.example.entity.App;
+import com.example.entity.AppInstance;
 import com.example.entity.Deploy;
 import com.example.entity.DeployExecution;
 import com.example.entity.DeployLog;
+import com.example.entity.Project;
 import com.example.entity.Server;
 import com.example.exception.BusinessException;
+import com.example.mapper.AppInstanceMapper;
 import com.example.mapper.AppMapper;
 import com.example.mapper.DeployExecutionMapper;
 import com.example.mapper.DeployLogMapper;
 import com.example.mapper.DeployMapper;
+import com.example.mapper.ProjectMapper;
 import com.example.mapper.ServerMapper;
 import com.example.utils.AuthUtils;
 import com.example.utils.TokenUtils;
@@ -36,7 +40,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import javax.annotation.Resource;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.Date;
 import java.util.List;
@@ -60,6 +63,12 @@ public class DeployService {
     private AppMapper appMapper;
 
     @Resource
+    private AppInstanceMapper appInstanceMapper;
+
+    @Resource
+    private ProjectMapper projectMapper;
+
+    @Resource
     private DeployExecutionMapper deployExecutionMapper;
 
     /**
@@ -75,14 +84,27 @@ public class DeployService {
         if (StrUtil.isBlank(dbApp.getRepoUrl())) {
             throw new BusinessException(ResultCodeEnum.PARAM_ERROR.code, "应用未配置代码仓库地址，无法生成拉取脚本");
         }
+        if (StrUtil.isBlank(deploy.getVersion())) {
+            throw new BusinessException(ResultCodeEnum.PARAM_LOST_ERROR.code, "请填写目标版本");
+        }
         if (ObjectUtil.isNull(deploy.getServerId())) {
-            deploy.setServerId(dbApp.getServerId());
+            throw new BusinessException(ResultCodeEnum.PARAM_LOST_ERROR.code, "请选择目标服务器");
         }
         Server server = serverMapper.selectById(deploy.getServerId());
-        if (ObjectUtil.isNull(server)) {
+        if (ObjectUtil.isNull(server) || StrUtil.isBlank(server.getEnv())) {
             throw new BusinessException(ResultCodeEnum.SERVER_NOT_EXIST_ERROR);
         }
         String env = server.getEnv();
+        AppInstance instance = appInstanceMapper.selectByAppAndEnv(deploy.getAppId(), env);
+        if (instance == null) {
+            throw new BusinessException(ResultCodeEnum.PARAM_ERROR.code, "该应用尚未挂到" + envLabel(env) + "环境");
+        }
+        if (!env.equals(server.getEnv())) {
+            throw new BusinessException(ResultCodeEnum.PARAM_ERROR.code, "目标服务器不属于该环境");
+        }
+        assertVersionPromotable(deploy.getAppId(), env, deploy.getVersion().trim());
+        deploy.setVersion(deploy.getVersion().trim());
+        deploy.setEnvCode(env);
         deploy.setDeployNo(generateDeployNo());
         deploy.setStatus(initialStatus(env));
         deploy.setDeployType(DeployTypeEnum.FULL.name());
@@ -164,11 +186,7 @@ public class DeployService {
         rememberRollbackTarget(dbDeploy);
         changeStatus(dbDeploy, DeployStatusEnum.DEPLOYING.name(), null, null);
 
-        // 开始部署只把应用置为部署中，版本与在线状态等 finishDeploy 成功后再反写
-        App updateApp = new App();
-        updateApp.setId(dbDeploy.getAppId());
-        updateApp.setStatus(AppStatusEnum.DEPLOYING.name());
-        appMapper.updateById(updateApp);
+        markInstance(dbDeploy, AppStatusEnum.DEPLOYING.name(), null);
 
         String startDetail = "开始部署，目标版本：" + dbDeploy.getVersion();
         if (DeployExecuteModeEnum.MANUAL.name().equals(dbDeploy.getExecuteMode())) {
@@ -202,15 +220,11 @@ public class DeployService {
             versionToWrite = dbDeploy.getRollbackVersion();
         }
 
-        App updateApp = new App();
-        updateApp.setId(dbDeploy.getAppId());
         if (success) {
-            updateApp.setVersion(versionToWrite);
-            updateApp.setStatus(AppStatusEnum.ONLINE.name());
+            markInstance(dbDeploy, AppStatusEnum.ONLINE.name(), versionToWrite);
         } else {
-            updateApp.setStatus(AppStatusEnum.OFFLINE.name());
+            markInstance(dbDeploy, AppStatusEnum.OFFLINE.name(), null);
         }
-        appMapper.updateById(updateApp);
 
         DeployActionEnum action = success ? DeployActionEnum.FINISH : DeployActionEnum.FAIL;
         String detail = success ? "部署成功，版本：" + versionToWrite : "部署失败，版本：" + dbDeploy.getVersion();
@@ -218,7 +232,7 @@ public class DeployService {
     }
 
     /**
-     * 回滚，只有部署成功的单子可以回滚，回滚后重新进入部署中状态，再走 finishDeploy
+     * 回滚，只有发布失败的单子可以回滚，回滚后重新进入部署中状态，再走 finishDeploy
      */
     @Transactional(rollbackFor = Exception.class)
     public void rollback(Integer id) {
@@ -226,7 +240,7 @@ public class DeployService {
         Deploy dbDeploy = getExistDeploy(id);
         DeployStatusMachine.assertRollback(dbDeploy.getStatus());
         if (ObjectUtil.isEmpty(dbDeploy.getRollbackVersion())) {
-            String previous = deployMapper.selectLatestSuccessVersion(dbDeploy.getAppId(), id);
+            String previous = deployMapper.selectLatestSuccessVersion(dbDeploy.getAppId(), id, dbDeploy.getEnvCode());
             if (ObjectUtil.isEmpty(previous)) {
                 throw new BusinessException(ResultCodeEnum.DEPLOY_STATUS_ERROR.code, "没有可回滚的历史成功版本");
             }
@@ -238,10 +252,7 @@ public class DeployService {
         }
         changeStatus(dbDeploy, DeployStatusEnum.DEPLOYING.name(), "", DeployTypeEnum.ROLLBACK.name());
 
-        App updateApp = new App();
-        updateApp.setId(dbDeploy.getAppId());
-        updateApp.setStatus(AppStatusEnum.DEPLOYING.name());
-        appMapper.updateById(updateApp);
+        markInstance(dbDeploy, AppStatusEnum.DEPLOYING.name(), null);
 
         String rollbackDetail = "发起回滚，目标版本：" + dbDeploy.getRollbackVersion();
         if (DeployExecuteModeEnum.MANUAL.name().equals(dbDeploy.getExecuteMode())) {
@@ -257,7 +268,7 @@ public class DeployService {
         DeployLog deployLog = new DeployLog();
         deployLog.setDeployId(deployId);
         deployLog.setAction(DeployActionEnum.HEALTH_CHECK_FAIL.name());
-        deployLog.setOperator("system");
+        deployLog.setOperator(null);
         deployLog.setDetail(detail);
         deployLog.setLogType("STATE");
         deployLog.setSeq(0);
@@ -328,6 +339,9 @@ public class DeployService {
     }
 
     private String targetEnv(Deploy deploy) {
+        if (StrUtil.isNotBlank(deploy.getEnvCode())) {
+            return deploy.getEnvCode();
+        }
         if (deploy.getServerId() == null) {
             return ServerEnvEnum.PROD.name();
         }
@@ -336,6 +350,51 @@ public class DeployService {
             return ServerEnvEnum.PROD.name();
         }
         return server.getEnv();
+    }
+
+    private void assertVersionPromotable(Integer appId, String env, String version) {
+        String source = null;
+        if (ServerEnvEnum.TEST.name().equals(env)) {
+            source = ServerEnvEnum.DEV.name();
+        } else if (ServerEnvEnum.PROD.name().equals(env)) {
+            source = ServerEnvEnum.TEST.name();
+        }
+        if (source == null) {
+            return;
+        }
+        if (deployMapper.countSuccessVersion(appId, source, version) <= 0) {
+            throw new BusinessException(ResultCodeEnum.PARAM_ERROR.code,
+                    "版本 " + version + " 尚未在" + envLabel(source) + "环境发布成功，不能进入" + envLabel(env) + "环境");
+        }
+    }
+
+    public java.util.List<String> promotableVersions(Integer appId, String targetEnv) {
+        AuthUtils.requireLogin();
+        String source = null;
+        if (ServerEnvEnum.TEST.name().equals(targetEnv)) {
+            source = ServerEnvEnum.DEV.name();
+        } else if (ServerEnvEnum.PROD.name().equals(targetEnv)) {
+            source = ServerEnvEnum.TEST.name();
+        }
+        if (appId == null || source == null) {
+            return java.util.Collections.emptyList();
+        }
+        return deployMapper.selectSuccessVersions(appId, source);
+    }
+
+    private void markInstance(Deploy deploy, String status, String version) {
+        String env = targetEnv(deploy);
+        AppInstance instance = appInstanceMapper.selectByAppAndEnv(deploy.getAppId(), env);
+        if (instance == null) {
+            throw new BusinessException(ResultCodeEnum.PARAM_ERROR.code, "找不到该环境上的应用实例");
+        }
+        AppInstance patch = new AppInstance();
+        patch.setId(instance.getId());
+        patch.setStatus(status);
+        if (version != null) {
+            patch.setVersion(version);
+        }
+        appInstanceMapper.updateById(patch);
     }
 
     private String envLabel(String env) {
@@ -381,7 +440,7 @@ public class DeployService {
         if (ObjectUtil.isNotEmpty(dbDeploy.getRollbackVersion())) {
             return;
         }
-        String previous = deployMapper.selectLatestSuccessVersion(dbDeploy.getAppId(), dbDeploy.getId());
+        String previous = deployMapper.selectLatestSuccessVersion(dbDeploy.getAppId(), dbDeploy.getId(), dbDeploy.getEnvCode());
         if (ObjectUtil.isEmpty(previous)) {
             return;
         }
@@ -497,6 +556,7 @@ public class DeployService {
         if (RoleEnum.DEV.name().equals(role)) {
             query.setApplicant(null);
             query.setScopeApplicant(currentUser.getUsername());
+            query.setScopeLeader(currentUser.getName());
             return;
         }
         if (RoleEnum.TL.name().equals(role)) {
@@ -506,6 +566,7 @@ public class DeployService {
         }
         if (RoleEnum.QA.name().equals(role)) {
             query.setStatus(DeployStatusEnum.TESTING.name());
+            query.setScopeEnv(ServerEnvEnum.TEST.name());
             return;
         }
         if (RoleEnum.PM.name().equals(role)) {
@@ -514,12 +575,27 @@ public class DeployService {
             return;
         }
         if (RoleEnum.OPS.name().equals(role)) {
-            List<String> allowed = Arrays.asList(
-                    DeployStatusEnum.PENDING.name(),
-                    DeployStatusEnum.APPROVED.name(),
-                    DeployStatusEnum.DEPLOYING.name(),
-                    DeployStatusEnum.SUCCESS.name(),
-                    DeployStatusEnum.FAILED.name());
+            List<String> allowed = new ArrayList<String>();
+            allowed.add(DeployStatusEnum.PENDING.name());
+            allowed.add(DeployStatusEnum.APPROVED.name());
+            allowed.add(DeployStatusEnum.DEPLOYING.name());
+            allowed.add(DeployStatusEnum.SUCCESS.name());
+            allowed.add(DeployStatusEnum.FAILED.name());
+            List<String> requested = query.getScopeStatuses();
+            if (requested != null && !requested.isEmpty()) {
+                List<String> narrowed = new ArrayList<String>();
+                for (String item : requested) {
+                    if (allowed.contains(item)) {
+                        narrowed.add(item);
+                    }
+                }
+                if (narrowed.isEmpty()) {
+                    narrowed.add("__NONE__");
+                }
+                query.setStatus(null);
+                query.setScopeStatuses(narrowed);
+                return;
+            }
             if (query.getStatus() == null || !allowed.contains(query.getStatus())) {
                 query.setStatus(null);
                 query.setScopeStatuses(allowed);
@@ -534,14 +610,15 @@ public class DeployService {
             return true;
         }
         if (RoleEnum.DEV.name().equals(role)) {
-            return currentUser.getUsername().equals(deploy.getApplicant());
+            return currentUser.getUsername().equals(deploy.getApplicant()) || isProjectLeader(deploy, currentUser);
         }
         if (RoleEnum.TL.name().equals(role)) {
             return DeployStatusEnum.REVIEW.name().equals(deploy.getStatus())
                     && ServerEnvEnum.PROD.name().equals(deploy.getServerEnv());
         }
         if (RoleEnum.QA.name().equals(role)) {
-            return DeployStatusEnum.TESTING.name().equals(deploy.getStatus());
+            return DeployStatusEnum.TESTING.name().equals(deploy.getStatus())
+                    && ServerEnvEnum.TEST.name().equals(deploy.getServerEnv());
         }
         if (RoleEnum.PM.name().equals(role)) {
             return DeployStatusEnum.ACCEPTING.name().equals(deploy.getStatus())
@@ -556,6 +633,21 @@ public class DeployService {
                     || DeployStatusEnum.FAILED.name().equals(status);
         }
         return false;
+    }
+
+    private boolean isProjectLeader(Deploy deploy, Account user) {
+        if (deploy == null || deploy.getAppId() == null || user == null) {
+            return false;
+        }
+        App app = appMapper.selectById(deploy.getAppId());
+        if (app == null || app.getProjectId() == null) {
+            return false;
+        }
+        Project project = projectMapper.selectById(app.getProjectId());
+        if (project == null || StrUtil.isBlank(project.getLeader())) {
+            return false;
+        }
+        return project.getLeader().equals(user.getUsername()) || project.getLeader().equals(user.getName());
     }
 
     private String normalizeExecuteMode(String mode) {
@@ -593,7 +685,7 @@ public class DeployService {
         DeployLog deployLog = new DeployLog();
         deployLog.setDeployId(deployId);
         deployLog.setAction(action.name());
-        deployLog.setOperator(operator);
+        deployLog.setOperator(StrUtil.isBlank(operator) || "system".equals(operator) ? null : operator);
         deployLog.setDetail(detail);
         deployLogMapper.insert(deployLog);
     }

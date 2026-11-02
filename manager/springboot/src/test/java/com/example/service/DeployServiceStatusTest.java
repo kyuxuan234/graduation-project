@@ -7,10 +7,11 @@ import com.example.common.enums.DeployTypeEnum;
 import com.example.common.enums.ResultCodeEnum;
 import com.example.common.enums.RoleEnum;
 import com.example.entity.Account;
-import com.example.entity.App;
+import com.example.entity.AppInstance;
 import com.example.entity.Deploy;
 import com.example.entity.DeployLog;
 import com.example.exception.BusinessException;
+import com.example.mapper.AppInstanceMapper;
 import com.example.mapper.AppMapper;
 import com.example.mapper.DeployLogMapper;
 import com.example.mapper.DeployMapper;
@@ -30,6 +31,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.nullable;
 import static org.mockito.Mockito.inOrder;
@@ -51,6 +53,8 @@ class DeployServiceStatusTest {
     private DeployLogMapper deployLogMapper;
     @Mock
     private AppMapper appMapper;
+    @Mock
+    private AppInstanceMapper appInstanceMapper;
 
     @InjectMocks
     private DeployService deployService;
@@ -65,6 +69,9 @@ class DeployServiceStatusTest {
                 nullable(Integer.class), nullable(String.class), nullable(Integer.class),
                 nullable(String.class), nullable(String.class), nullable(String.class)
         )).thenReturn(1);
+        AppInstance instance = new AppInstance();
+        instance.setId(99);
+        lenient().when(appInstanceMapper.selectByAppAndEnv(any(), any())).thenReturn(instance);
         lenient().when(deployMapper.casApprove(
                 nullable(Integer.class), nullable(String.class), nullable(Integer.class),
                 nullable(String.class), nullable(String.class), nullable(String.class),
@@ -83,10 +90,10 @@ class DeployServiceStatusTest {
 
         deployService.startDeploy(1);
 
-        App app = captureAppUpdate();
-        assertEquals(Integer.valueOf(10), app.getId());
-        assertEquals(AppStatusEnum.DEPLOYING.name(), app.getStatus());
-        assertNull(app.getVersion());
+        AppInstance row = captureInstanceUpdate();
+        assertEquals(Integer.valueOf(99), row.getId());
+        assertEquals(AppStatusEnum.DEPLOYING.name(), row.getStatus());
+        assertNull(row.getVersion());
     }
 
     @Test
@@ -95,9 +102,9 @@ class DeployServiceStatusTest {
 
         deployService.finishDeploy(1, DeployStatusEnum.SUCCESS.name());
 
-        App app = captureAppUpdate();
-        assertEquals(AppStatusEnum.ONLINE.name(), app.getStatus());
-        assertEquals("v2.0.0", app.getVersion());
+        AppInstance row = captureInstanceUpdate();
+        assertEquals(AppStatusEnum.ONLINE.name(), row.getStatus());
+        assertEquals("v2.0.0", row.getVersion());
     }
 
     @Test
@@ -106,9 +113,9 @@ class DeployServiceStatusTest {
 
         deployService.finishDeploy(1, DeployStatusEnum.FAILED.name());
 
-        App app = captureAppUpdate();
-        assertEquals(AppStatusEnum.OFFLINE.name(), app.getStatus());
-        assertNull(app.getVersion());
+        AppInstance row = captureInstanceUpdate();
+        assertEquals(AppStatusEnum.OFFLINE.name(), row.getStatus());
+        assertNull(row.getVersion());
     }
 
     @Test
@@ -122,7 +129,7 @@ class DeployServiceStatusTest {
         verify(deployMapper, never()).casUpdateStatus(
                 nullable(Integer.class), nullable(String.class), nullable(Integer.class),
                 nullable(String.class), nullable(String.class), nullable(String.class));
-        verify(appMapper, never()).updateById(any(App.class));
+        verify(appInstanceMapper, never()).updateById(any(AppInstance.class));
         verify(deployLogMapper, never()).insert(any(DeployLog.class));
     }
 
@@ -234,15 +241,16 @@ class DeployServiceStatusTest {
         Deploy db = new Deploy();
         db.setId(id);
         db.setAppId(10);
+        db.setEnvCode("DEV");
         db.setStatus(status.name());
         db.setVersion(version);
         db.setDeployType(type.name());
         return db;
     }
 
-    private App captureAppUpdate() {
-        ArgumentCaptor<App> captor = ArgumentCaptor.forClass(App.class);
-        verify(appMapper).updateById(captor.capture());
+    private AppInstance captureInstanceUpdate() {
+        ArgumentCaptor<AppInstance> captor = ArgumentCaptor.forClass(AppInstance.class);
+        verify(appInstanceMapper).updateById(captor.capture());
         return captor.getValue();
     }
 

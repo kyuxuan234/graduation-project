@@ -1,9 +1,9 @@
 <template>
   <div>
-    <div class="relation-bar" v-if="scopeHint || params.id || params.appId || params.serverId || params.status || finished">
+    <div class="relation-bar" v-if="scopeHint || params.id || params.appId || params.serverId || params.envCode || params.status || finished">
       <i class="el-icon-view"></i>
       <span>{{ scopeHint }}</span>
-      <template v-if="params.id || params.appId || params.serverId || params.status || finished">
+      <template v-if="params.id || params.appId || params.serverId || params.envCode || params.status || finished">
         <i class="el-icon-link" style="margin-left: 12px"></i>
         <span>{{ deployHint }}</span>
         <span class="link-text" style="margin-left: 12px" @click="reset">{{ user.role === 'ADMIN' ? '查看全部' : '清除筛选' }}</span>
@@ -63,7 +63,7 @@
             <el-tag size="mini" :type="envTag[scope.row.serverEnv] || 'info'">{{ envNames[scope.row.serverEnv] || '-' }}</el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="执行方式" width="110" align="center">
+        <el-table-column label="执行方式" width="120" align="center">
           <template slot="header"><span class="th-label"><i class="el-icon-set-up"></i>执行方式</span></template>
           <template v-slot="scope">
             <span v-if="!modeChosen(scope.row)" class="cell-text">-</span>
@@ -137,14 +137,22 @@
             <el-option v-for="item in appList" :key="item.id" :label="item.name + '（' + item.code + '）'" :value="item.id"></el-option>
           </el-select>
         </el-form-item>
+        <el-form-item label="目标环境" prop="envCode">
+          <el-select v-model="form.envCode" placeholder="请选择已挂载的环境" style="width: 100%" :popper-append-to-body="false" @change="handleEnvChange">
+            <el-option v-for="item in deployInstances" :key="item.envCode" :label="(item.envName || envNames[item.envCode]) + ' · ' + (item.serverName || '')" :value="item.envCode"></el-option>
+          </el-select>
+        </el-form-item>
         <el-form-item label="目标服务器" prop="serverId">
-          <el-select v-model="form.serverId" placeholder="请选择目标服务器" style="width: 100%">
-            <el-option v-for="item in serverList" :key="item.id"
+          <el-select v-model="form.serverId" placeholder="请选择该环境中的服务器" style="width: 100%" :popper-append-to-body="false">
+            <el-option v-for="item in serversInEnv()" :key="item.id"
                        :label="item.hostname + '（' + (envNames[item.env] || item.env) + '）'" :value="item.id"></el-option>
           </el-select>
         </el-form-item>
         <el-form-item label="目标版本" prop="version">
-          <el-input v-model="form.version" placeholder="如 v1.0.1"></el-input>
+          <el-select v-if="form.envCode && form.envCode !== 'DEV'" v-model="form.version" filterable allow-create placeholder="只能选择上一环境已发布成功的版本" style="width: 100%">
+            <el-option v-for="item in promotableVersions" :key="item" :label="item" :value="item"></el-option>
+          </el-select>
+          <el-input v-else v-model="form.version" placeholder="开发环境填写目标版本，如 v1.0.0"></el-input>
         </el-form-item>
         <el-form-item label="拉取脚本" v-if="!form.id">
           <el-button size="small" icon="el-icon-document" @click="buildRepoScript">生成获取仓库代码脚本</el-button>
@@ -201,25 +209,26 @@
         <el-form label-width="90px">
           <el-form-item label="执行方式">
             <el-radio-group v-model="startForm.executeMode">
-              <el-radio label="AUTO">自动部署</el-radio>
-              <el-radio label="MANUAL">手动部署</el-radio>
+              <el-radio label="AUTO">自动发布</el-radio>
+              <el-radio label="MANUAL">人工发布</el-radio>
             </el-radio-group>
           </el-form-item>
         </el-form>
-        <p class="action-tip">自动：SSH 在目标机执行仓库拉取脚本。手动：本窗打开终端，做完后点成功/失败。</p>
+        <p class="action-tip">自动发布：按已审批版本在目标环境拉取代码并完成发布，结果自动记入本单。</p>
+        <p class="action-tip">人工发布：运维登录目标环境完成操作，结束后在本页确认发布成功或发布失败。</p>
       </div>
 
       <div v-else-if="actionScene === 'manual'">
-        <p class="action-tip">点击黑色窗口后直接输入，回车执行。可用标题栏「放大窗口」铺满屏幕。</p>
+        <p class="action-tip">已连接目标环境。在下方终端完成发布操作，结束后确认发布成功或发布失败。</p>
         <div class="ssh-screen" :class="{ 'ssh-screen-large': sshLarge }" ref="sshScreen" tabindex="0" @keydown="onSshKey" @paste="onSshPaste" @click="focusSsh">{{ sshText || '正在连接…' }}<span v-if="sshReady" class="ssh-caret"></span></div>
       </div>
 
       <div v-else-if="actionScene === 'auto'">
-        <p class="action-tip">自动部署正在目标机执行脚本。可以查看执行日志，确认结束后标记成功或失败。</p>
+        <p class="action-tip">正在目标环境按审批版本发布。可查看执行日志，结束后确认发布成功或发布失败。</p>
       </div>
 
       <div v-else-if="actionScene === 'rollback'">
-        <p class="action-tip">回滚后这张部署单会重新进入部署中，并按原来的执行方式处理。</p>
+        <p class="action-tip">发布失败后可回滚到该应用上一次成功的版本。回滚后这张发布单会重新进入发布中，并按原来的执行方式处理。</p>
       </div>
 
       <div v-else>
@@ -283,6 +292,8 @@
 
 <script>
 import { personName, personRoleName, roleTag, canDev, canOps, canTl, canQa, canPm, isAdmin } from '@/utils/person'
+import { wsBaseUrl } from '@/utils/apiBase'
+import { DEPLOY_STATUS_NAME } from '@/utils/deployStatus'
 
 export default {
   name: "Deploy",
@@ -292,12 +303,12 @@ export default {
       pageNum: 1,   // 当前的页码
       pageSize: 20,  // 每页显示的个数
       total: 0,
-      params: { id: null, deployNo: null, status: null, applicant: null, appId: null, serverId: null },   // 搜索条件
+      params: { id: null, deployNo: null, status: null, applicant: null, appId: null, serverId: null, envCode: null },   // 搜索条件
       ids: [],
       finished: false,
       dateRange: [],   // 申请时间范围
       fromVisible: false,
-      form: {},
+      form: { appId: null, envCode: null, serverId: null, version: '', reason: '' },
       approveForm: {},
       startForm: { executeMode: 'AUTO' },
       actionVisible: false,
@@ -321,23 +332,21 @@ export default {
       serverList: [],   // 服务器下拉数据源
       user: JSON.parse(localStorage.getItem('xm-user') || '{}'),
       statusOptions: [
-        { value: 'REVIEW', label: '待技术审查' },
-        { value: 'TESTING', label: '待测试验收' },
-        { value: 'ACCEPTING', label: '待产品验收' },
-        { value: 'PENDING', label: '待运维审批' },
-        { value: 'APPROVED', label: '已批准' },
-        { value: 'REJECTED', label: '已驳回' },
-        { value: 'DEPLOYING', label: '部署中' },
-        { value: 'SUCCESS', label: '成功' },
-        { value: 'FAILED', label: '失败' },
+        { value: 'REVIEW', label: DEPLOY_STATUS_NAME.REVIEW },
+        { value: 'TESTING', label: DEPLOY_STATUS_NAME.TESTING },
+        { value: 'ACCEPTING', label: DEPLOY_STATUS_NAME.ACCEPTING },
+        { value: 'PENDING', label: DEPLOY_STATUS_NAME.PENDING },
+        { value: 'APPROVED', label: DEPLOY_STATUS_NAME.APPROVED },
+        { value: 'REJECTED', label: DEPLOY_STATUS_NAME.REJECTED },
+        { value: 'DEPLOYING', label: DEPLOY_STATUS_NAME.DEPLOYING },
+        { value: 'SUCCESS', label: DEPLOY_STATUS_NAME.SUCCESS },
+        { value: 'FAILED', label: DEPLOY_STATUS_NAME.FAILED },
       ],
       envNames: { DEV: '开发环境', TEST: '测试环境', PROD: '生产环境' },
+      deployInstances: [],
+      promotableVersions: [],
       envTag: { DEV: 'success', TEST: 'warning', PROD: 'danger' },
-      statusNames: {
-        REVIEW: '待技术审查', TESTING: '待测试验收', ACCEPTING: '待产品验收',
-        PENDING: '待运维审批', APPROVED: '已批准', REJECTED: '已驳回',
-        DEPLOYING: '部署中', SUCCESS: '成功', FAILED: '失败'
-      },
+      statusNames: DEPLOY_STATUS_NAME,
       statusTag: {
         REVIEW: 'warning', TESTING: 'warning', ACCEPTING: 'warning',
         PENDING: 'warning', APPROVED: 'primary', DEPLOYING: 'primary',
@@ -348,10 +357,11 @@ export default {
         PENDING: 'el-icon-time', APPROVED: 'el-icon-check', DEPLOYING: 'el-icon-loading',
         REJECTED: 'el-icon-close', FAILED: 'el-icon-circle-close', SUCCESS: 'el-icon-circle-check'
       },
-      modeNames: { AUTO: '自动', MANUAL: '手动' },
+      modeNames: { AUTO: '自动发布', MANUAL: '人工发布' },
       actionNames: {
-        APPLY: '提交申请', APPROVE: '审批通过', REJECT: '审批驳回',
-        START_DEPLOY: '开始部署', FINISH: '部署成功', FAIL: '部署失败', ROLLBACK: '回滚'
+        APPLY: '提交申请', APPROVE: '审查通过', REJECT: '驳回',
+        START_DEPLOY: '开始部署', FINISH: '部署成功', FAIL: '部署失败', ROLLBACK: '回滚',
+        HEALTH_CHECK_FAIL: '探活失败', EXEC: '执行输出'
       },
       actionTag: {
         APPLY: 'info', APPROVE: 'success', REJECT: 'danger',
@@ -363,6 +373,12 @@ export default {
         ],
         version: [
           {required: true, message: '请输入目标版本', trigger: 'blur'},
+        ],
+        envCode: [
+          {required: true, message: '请选择目标环境', trigger: 'change'},
+        ],
+        serverId: [
+          {required: true, message: '请选择目标服务器', trigger: 'change'},
         ]
       },
     }
@@ -370,9 +386,9 @@ export default {
   computed: {
     scopeHint() {
       const role = this.user.role
-      if (role === 'DEV') return '只显示你提交的发布单'
+      if (role === 'DEV') return '只显示你提交的发布单，以及你负责的项目下的发布单'
       if (role === 'TL') return '只显示生产环境中待你技术审查的发布单'
-      if (role === 'QA') return '只显示待你测试验收的发布单，包括测试环境和生产环境'
+      if (role === 'QA') return '只显示测试环境中待你测试验收的发布单'
       if (role === 'PM') return '只显示生产环境中待你产品验收的发布单'
       if (role === 'OPS') return '只显示已交给运维的发布单，不含还在审查或验收中的单'
       return ''
@@ -391,7 +407,7 @@ export default {
       const env = server && server.env
       if (env === 'DEV') return '开发环境：提交后直接由运维审批并执行'
       if (env === 'TEST') return '测试环境：测试验收通过后，由运维审批并执行'
-      if (env === 'PROD') return '生产环境：技术审查 → 测试验收 → 产品验收 → 运维审批并执行'
+      if (env === 'PROD') return '生产环境：技术审查 → 产品验收 → 运维审批并执行'
       return '请选择目标服务器，流程随环境而定'
     },
     actionTitle() {
@@ -401,11 +417,11 @@ export default {
         approve: '运维审批',
         review: '审查验收',
         edit: '修改申请',
-        start: '开始部署',
-        manual: '手动部署',
-        auto: '自动部署',
-        rollback: '回滚部署',
-        view: '部署详情'
+        start: '开始发布',
+        manual: '人工发布',
+        auto: '自动发布',
+        rollback: '回滚发布',
+        view: '发布详情'
       }
       const name = names[this.actionScene] || '操作'
       return no ? name + ' · ' + no : name
@@ -414,7 +430,8 @@ export default {
       if (this.params.id) return '当前按关联部署单定位'
       if (this.params.appId) return '当前查看该应用的部署单'
       if (this.params.serverId) return '当前查看该服务器的部署单'
-      if (this.finished) return '当前查看已完结部署（已交付 + 发布失败）'
+      if (this.params.envCode) return '当前查看' + (this.envNames[this.params.envCode] || this.params.envCode) + '的部署单'
+      if (this.finished) return '当前查看已完结发布（发布成功 + 发布失败）'
       if (this.params.status) return '当前查看' + (this.statusNames[this.params.status] || this.params.status) + '的部署单'
       return ''
     }
@@ -457,6 +474,7 @@ export default {
       this.params.id = q.id ? Number(q.id) : null
       this.params.appId = q.appId ? Number(q.appId) : null
       this.params.serverId = q.serverId ? Number(q.serverId) : null
+      this.params.envCode = q.envCode || null
       this.finished = q.finished === '1'
       this.params.status = this.finished ? null : (q.status || null)
     },
@@ -483,14 +501,39 @@ export default {
         this.serverList = res.data || []
       })
     },
-    handleAppChange(appId) {   // 选择应用后默认带出该应用当前部署的服务器
-      const app = this.appList.find(v => v.id === appId)
-      if (app) {
-        this.form.serverId = app.serverId
-      }
+    serversInEnv() {
+      const env = this.form && this.form.envCode
+      return (this.serverList || []).filter(item => !env || item.env === env)
+    },
+    handleAppChange(appId) {
+      this.$set(this.form, 'envCode', null)
+      this.$set(this.form, 'serverId', null)
+      this.$set(this.form, 'version', '')
+      this.promotableVersions = []
+      this.deployInstances = []
+      if (!appId) return
+      this.$request.get('/appInstance/byApp/' + appId).then(res => {
+        this.deployInstances = res.data || []
+        if (this.deployInstances.length === 1) {
+          this.$set(this.form, 'envCode', this.deployInstances[0].envCode)
+          this.handleEnvChange(this.form.envCode)
+        }
+      })
+    },
+    handleEnvChange(envCode) {
+      const instance = (this.deployInstances || []).find(item => item.envCode === envCode)
+      this.$set(this.form, 'serverId', instance ? instance.serverId : null)
+      this.$set(this.form, 'version', '')
+      this.promotableVersions = []
+      if (!this.form.appId || envCode === 'DEV') return
+      this.$request.get('/deploy/promotable', { params: { appId: this.form.appId, envCode: envCode } }).then(res => {
+        this.promotableVersions = res.data || []
+      })
     },
     handleApply() {
-      this.form = {}
+      this.form = { appId: null, envCode: null, serverId: null, version: '', reason: '' }
+      this.deployInstances = []
+      this.promotableVersions = []
       this.repoScript = ''
       this.fromVisible = true
     },
@@ -505,6 +548,7 @@ export default {
         return
       }
       this.$request.post('/app/repoScript', {
+        id: app.id,
         name: app.name,
         code: app.code,
         version: this.form.version,
@@ -570,7 +614,7 @@ export default {
       if (canOps(this.user) && row.status === 'APPROVED') return 'start'
       if (canOps(this.user) && row.status === 'DEPLOYING' && row.executeMode === 'MANUAL') return 'manual'
       if (canOps(this.user) && row.status === 'DEPLOYING') return 'auto'
-      if (canOps(this.user) && row.status === 'SUCCESS') return 'rollback'
+      if (canOps(this.user) && row.status === 'FAILED') return 'rollback'
       return 'view'
     },
     actionLabel(row) {
@@ -641,7 +685,7 @@ export default {
         params: { executeMode: this.startForm.executeMode }
       }).then(res => {
         if (res.code === '200') {
-          this.$message.success(manual ? '已进入手动部署' : '已开始自动部署')
+          this.$message.success(manual ? '已进入人工发布' : '已开始自动发布')
           const row = Object.assign({}, this.actionRow, {
             id: this.startForm.id,
             deployNo: this.startForm.deployNo,
@@ -671,8 +715,7 @@ export default {
     },
     connectSsh() {
       const user = JSON.parse(localStorage.getItem('xm-user') || '{}')
-      const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-      const url = proto + '//' + window.location.host + '/api/ssh/terminal?deployId=' + this.sshRow.id + '&token=' + encodeURIComponent(user.token || '')
+      const url = wsBaseUrl() + '/ssh/terminal?deployId=' + this.sshRow.id + '&token=' + encodeURIComponent(user.token || '')
       const socket = new WebSocket(url)
       this.sshSocket = socket
       socket.onopen = () => {
@@ -742,7 +785,7 @@ export default {
       })
     },
     rollback(id) {   // 回滚，需要二次确认
-      this.$confirm('回滚后该部署单会重新进入部署中状态，您确定回滚吗？', '确认回滚', {type: "warning"}).then(response => {
+      this.$confirm('将回滚到该应用上一次成功的版本，发布单会重新进入发布中。确定回滚吗？', '确认回滚', {type: "warning"}).then(response => {
         this.$request.put('/deploy/rollback/' + id).then(res => {
           if (res.code === '200') {
             this.$message.success('操作成功')
@@ -855,15 +898,10 @@ export default {
         endTime: this.dateRange && this.dateRange.length ? this.dateRange[1] + ' 23:59:59' : null,
       }
       if (this.finished) {
-        const query = { ...params, status: null }
-        Promise.all([
-          this.$request.get('/deploy/selectPage', { params: { ...query, status: 'SUCCESS' } }),
-          this.$request.get('/deploy/selectPage', { params: { ...query, status: 'FAILED' } }),
-        ]).then(([successRes, failedRes]) => {
-          const successList = successRes.data?.list || []
-          const failedList = failedRes.data?.list || []
-          this.tableData = successList.concat(failedList)
-          this.total = (successRes.data?.total || 0) + (failedRes.data?.total || 0)
+        const query = { ...params, status: null, statuses: 'SUCCESS,FAILED' }
+        this.$request.get('/deploy/selectPage', { params: query }).then(res => {
+          this.tableData = res.data?.list || []
+          this.total = res.data?.total || 0
         })
         return
       }
@@ -873,10 +911,10 @@ export default {
       })
     },
     reset() {
-      this.params = { id: null, deployNo: null, status: null, applicant: null, appId: null, serverId: null }
+      this.params = { id: null, deployNo: null, status: null, applicant: null, appId: null, serverId: null, envCode: null }
       this.finished = false
       this.dateRange = []
-      if (this.$route.query.id || this.$route.query.appId || this.$route.query.serverId || this.$route.query.status || this.$route.query.finished) {
+      if (this.$route.query.id || this.$route.query.appId || this.$route.query.serverId || this.$route.query.envCode || this.$route.query.status || this.$route.query.finished) {
         this.$router.replace({ path: '/deploy' })
       }
       this.load(1)

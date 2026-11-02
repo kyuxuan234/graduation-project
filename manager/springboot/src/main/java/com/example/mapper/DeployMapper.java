@@ -59,9 +59,13 @@ public interface DeployMapper {
                    @Param("approveTime") String approveTime,
                    @Param("remark") String remark);
 
-    int countOtherDeploying(@Param("appId") Integer appId, @Param("excludeId") Integer excludeId);
+    int countOtherDeploying(@Param("appId") Integer appId, @Param("excludeId") Integer excludeId, @Param("envCode") String envCode);
 
-    String selectLatestSuccessVersion(@Param("appId") Integer appId, @Param("excludeId") Integer excludeId);
+    String selectLatestSuccessVersion(@Param("appId") Integer appId, @Param("excludeId") Integer excludeId, @Param("envCode") String envCode);
+
+    java.util.List<String> selectSuccessVersions(@Param("appId") Integer appId, @Param("envCode") String envCode);
+
+    int countSuccessVersion(@Param("appId") Integer appId, @Param("envCode") String envCode, @Param("version") String version);
 
     List<Deploy> selectRecentForServer(@Param("serverId") Integer serverId, @Param("since") String since);
 

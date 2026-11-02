@@ -98,9 +98,10 @@ const ALL_MENUS = [
   {
     index: 'asset', name: '项目资产', icon: 'el-icon-folder-opened',
     children: [
-      { index: '/project', name: '业务项目', icon: 'el-icon-folder', roles: ['ADMIN', 'DEV'] },
+      { index: '/project', name: '业务项目', icon: 'el-icon-folder', roles: ['ADMIN', 'DEV', 'TL'] },
       { index: '/app', name: '应用服务', icon: 'el-icon-s-platform', roles: ['ADMIN', 'DEV', 'OPS'] },
-      { index: '/server', name: '部署环境', icon: 'el-icon-monitor', roles: ['ADMIN', 'OPS'] },
+      { index: '/environment', name: '运行环境', icon: 'el-icon-orange', roles: ['ADMIN', 'OPS'] },
+      { index: '/server', name: '服务器', icon: 'el-icon-monitor', roles: ['ADMIN', 'OPS'] },
     ]
   },
   {
@@ -122,6 +123,7 @@ const ALL_MENUS = [
 
 const PAGE_ICONS = {
   '/project': 'el-icon-folder',
+  '/environment': 'el-icon-orange',
   '/server': 'el-icon-monitor',
   '/app': 'el-icon-s-platform',
   '/deploy': 'el-icon-s-promotion',
@@ -134,7 +136,7 @@ const PAGE_ICONS = {
   '/notice': 'el-icon-bell',
 }
 
-const ROLE_NAMES = { ADMIN: '超级管理员', DEV: '开发人员', TL: '技术负责人', QA: '测试', PM: '产品经理', OPS: '运维人员' }
+const ROLE_NAMES = { ADMIN: '超级管理员', DEV: '开发人员', TL: '技术负责人', QA: '测试人员', PM: '产品经理', OPS: '运维人员' }
 
 export default {
   name: "Manager",

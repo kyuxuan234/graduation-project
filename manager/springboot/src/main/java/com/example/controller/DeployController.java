@@ -9,6 +9,7 @@ import com.example.service.DeployService;
 import com.github.pagehelper.PageInfo;
 import org.springframework.web.bind.annotation.*;
 import javax.annotation.Resource;
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -27,6 +28,11 @@ public class DeployController {
     /**
      * 发起部署申请，只有DEV角色可以操作
      */
+    @GetMapping("/promotable")
+    public Result<List<String>> promotable(@RequestParam Integer appId, @RequestParam String envCode) {
+        return Result.success(deployService.promotableVersions(appId, envCode));
+    }
+
     @PostMapping("/add")
     public Result<Void> add(@RequestBody Deploy deploy) {
         deployService.add(deploy);
@@ -84,7 +90,18 @@ public class DeployController {
     @GetMapping("/selectPage")
     public Result<PageInfo<Deploy>> selectPage(Deploy deploy,
                              @RequestParam(defaultValue = "1") Integer pageNum,
-                             @RequestParam(defaultValue = "10") Integer pageSize) {
+                             @RequestParam(defaultValue = "10") Integer pageSize,
+                             @RequestParam(required = false) String statuses) {
+        if (deploy != null && statuses != null && !statuses.trim().isEmpty()) {
+            List<String> scope = new ArrayList<String>();
+            for (String item : statuses.split(",")) {
+                if (item != null && !item.trim().isEmpty()) {
+                    scope.add(item.trim());
+                }
+            }
+            deploy.setStatus(null);
+            deploy.setScopeStatuses(scope);
+        }
         PageInfo<Deploy> page = deployService.selectPage(deploy, pageNum, pageSize);
         return Result.success(page);
     }

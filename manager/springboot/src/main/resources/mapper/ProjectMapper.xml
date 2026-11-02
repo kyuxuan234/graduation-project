@@ -82,9 +82,7 @@
             <if test="techStack != null">
                 tech_stack = #{techStack},
             </if>
-            <if test="leader != null">
-                leader = #{leader},
-            </if>
+            leader = #{leader,jdbcType=VARCHAR},
             <if test="status != null">
                 status = #{status},
             </if>

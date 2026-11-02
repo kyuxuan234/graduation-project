@@ -11,7 +11,7 @@
     <select id="selectAll" resultType="com.example.entity.Server">
         select
         <include refid="Base_Column_List" />,
-        (select count(*) from app a where a.server_id = server.id and a.deleted = 0) as app_count
+        (select count(*) from app_instance i where i.server_id = server.id and i.deleted = 0) as app_count
         from server
         <where>
             deleted = 0

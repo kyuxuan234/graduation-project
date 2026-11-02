@@ -7,10 +7,10 @@ import com.example.common.CredentialCipher;
 import com.example.common.DeployExecutor;
 import com.example.common.enums.AlarmLevelEnum;
 import com.example.common.enums.AppStatusEnum;
-import com.example.entity.App;
+import com.example.entity.AppInstance;
 import com.example.entity.Deploy;
 import com.example.entity.Server;
-import com.example.mapper.AppMapper;
+import com.example.mapper.AppInstanceMapper;
 import com.example.mapper.DeployMapper;
 import com.example.mapper.ServerMapper;
 import org.slf4j.Logger;
@@ -42,7 +42,7 @@ public class HealthCheckService {
     private ServerMapper serverMapper;
 
     @Resource
-    private AppMapper appMapper;
+    private AppInstanceMapper appInstanceMapper;
 
     @Resource
     private DeployMapper deployMapper;
@@ -82,14 +82,12 @@ public class HealthCheckService {
         if (!enabled) {
             return;
         }
-        App query = new App();
-        query.setStatus(AppStatusEnum.ONLINE.name());
-        List<App> apps = appMapper.selectAll(query);
-        for (App app : apps) {
+        List<AppInstance> instances = appInstanceMapper.selectOnline();
+        for (AppInstance instance : instances) {
             try {
-                probeApp(app);
+                probeInstance(instance);
             } catch (Exception e) {
-                log.warn("应用探活异常 id={}: {}", app.getId(), e.getMessage());
+                log.warn("应用探活异常 id={}: {}", instance.getId(), e.getMessage());
             }
         }
     }
@@ -117,35 +115,36 @@ public class HealthCheckService {
         }
     }
 
-    private void probeApp(App app) {
-        String marker = "[app:" + app.getId() + "]";
-        Server server = serverMapper.selectById(app.getServerId());
+    private void probeInstance(AppInstance instance) {
+        String name = StrUtil.blankToDefault(instance.getAppName(), "应用");
+        String marker = "[app:" + instance.getAppId() + ":" + instance.getEnvCode() + "]";
+        Server server = serverMapper.selectById(instance.getServerId());
         if (server == null) {
-            alarmService.raiseAuto(marker, app.getId(), null, null, AlarmLevelEnum.WARNING.name(),
-                    marker + " 应用 " + app.getName() + " 未关联服务器", cooldownMinutes);
+            alarmService.raiseAuto(marker, instance.getAppId(), null, null, AlarmLevelEnum.WARNING.name(),
+                    marker + " 应用 " + name + " 未关联服务器", cooldownMinutes);
             return;
         }
         String problem = credentialProblem(server);
         if (problem != null || StrUtil.isBlank(server.getSshUser())) {
-            alarmService.raiseAuto(marker, app.getId(), server.getId(), null, AlarmLevelEnum.WARNING.name(),
-                    marker + " 应用 " + app.getName() + " 所在主机 SSH 配置不完整", cooldownMinutes);
+            alarmService.raiseAuto(marker, instance.getAppId(), server.getId(), null, AlarmLevelEnum.WARNING.name(),
+                    marker + " 应用 " + name + " 所在主机 SSH 配置不完整", cooldownMinutes);
             return;
         }
         try {
-            if (app.getPort() != null && app.getPort() > 0) {
-                sshDeployExecutor.runCommand(server, "(echo >/dev/tcp/127.0.0.1/" + app.getPort() + ") >/dev/null");
+            if (instance.getPort() != null && instance.getPort() > 0) {
+                sshDeployExecutor.runCommand(server, "(echo >/dev/tcp/127.0.0.1/" + instance.getPort() + ") >/dev/null");
             } else if (StrUtil.isNotBlank(server.getDeployPath())) {
                 String current = server.getDeployPath() + "/current";
                 sshDeployExecutor.runCommand(server, "test -e '" + current.replace("'", "") + "'");
             } else {
-                alarmService.raiseAuto(marker, app.getId(), server.getId(), null, AlarmLevelEnum.WARNING.name(),
-                        marker + " 应用 " + app.getName() + " 没有端口，服务器也没有部署目录", cooldownMinutes);
+                alarmService.raiseAuto(marker, instance.getAppId(), server.getId(), null, AlarmLevelEnum.WARNING.name(),
+                        marker + " 应用 " + name + " 没有端口，服务器也没有部署目录", cooldownMinutes);
                 return;
             }
-            alarmService.markRecovered(marker, app.getId(), server.getId());
+            alarmService.markRecovered(marker, instance.getAppId(), server.getId());
         } catch (Exception e) {
-            alarmService.raiseAuto(marker, app.getId(), server.getId(), null, AlarmLevelEnum.CRITICAL.name(),
-                    marker + " 应用 " + app.getName() + " 探活失败：" + shortMsg(e), cooldownMinutes);
+            alarmService.raiseAuto(marker, instance.getAppId(), server.getId(), null, AlarmLevelEnum.CRITICAL.name(),
+                    marker + " 应用 " + name + " 探活失败：" + shortMsg(e), cooldownMinutes);
         }
     }
 

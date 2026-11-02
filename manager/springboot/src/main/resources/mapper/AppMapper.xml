@@ -5,18 +5,17 @@
 <mapper namespace="com.example.mapper.AppMapper">
 
     <sql id="Base_Column_List">
-        a.id,a.name,a.code,a.project_id,a.server_id,a.port,a.version,a.tech_stack,a.repo_url,a.status,a.create_time,a.update_time,a.deleted
+        a.id,a.name,a.code,a.project_id,a.tech_stack,a.repo_url,a.create_time,a.update_time,a.deleted
     </sql>
 
     <!-- 联查字段：项目名、服务器主机名、服务器环境 -->
     <sql id="Join_Column_List">
-        p.name as project_name, s.hostname as server_name, s.env as server_env
+        p.name as project_name
     </sql>
 
     <sql id="Join_Table">
         from app a
         left join project p on a.project_id = p.id and p.deleted = 0
-        left join server s on a.server_id = s.id and s.deleted = 0
     </sql>
 
     <select id="selectAll" resultType="com.example.entity.App">
@@ -24,16 +23,18 @@
         <include refid="Base_Column_List" />,
         <include refid="Join_Column_List" />,
         (select count(*) from deploy d where d.app_id = a.id and d.deleted = 0) as deploy_count,
-        (select count(*) from alarm al where al.app_id = a.id and al.deleted = 0) as alarm_count
+        (select count(*) from alarm al where al.app_id = a.id and al.deleted = 0) as alarm_count,
+        (select count(*) from app_instance i where i.app_id = a.id and i.deleted = 0 and i.status = 'ONLINE') as online_count
         <include refid="Join_Table" />
         <where>
             a.deleted = 0
             <if test="id != null"> and a.id= #{id}</if>
             <if test="name != null"> and a.name like concat('%', #{name}, '%')</if>
             <if test="code != null"> and a.code= #{code}</if>
-            <if test="status != null"> and a.status= #{status}</if>
             <if test="projectId != null"> and a.project_id= #{projectId}</if>
-            <if test="serverId != null"> and a.server_id= #{serverId}</if>
+            <if test="serverId != null"> and exists (
+                select 1 from app_instance i where i.app_id = a.id and i.server_id = #{serverId} and i.deleted = 0
+            )</if>
         </where>
         order by a.id desc
     </select>
@@ -58,7 +59,7 @@
     </select>
 
     <select id="countByServerId" resultType="java.lang.Integer">
-        select count(*) from app where server_id = #{serverId} and deleted = 0
+        select count(*) from app_instance where server_id = #{serverId} and deleted = 0
     </select>
 
     <update id="deleteById">
@@ -73,23 +74,15 @@
                 <if test="name != null">name,</if>
                 <if test="code != null">code,</if>
                 <if test="projectId != null">project_id,</if>
-                <if test="serverId != null">server_id,</if>
-                <if test="port != null">port,</if>
-                <if test="version != null">version,</if>
                 <if test="techStack != null">tech_stack,</if>
                 <if test="repoUrl != null">repo_url,</if>
-                <if test="status != null">status,</if>
         </trim>
         <trim prefix="values (" suffix=")" suffixOverrides=",">
                 <if test="name != null">#{name},</if>
                 <if test="code != null">#{code},</if>
                 <if test="projectId != null">#{projectId},</if>
-                <if test="serverId != null">#{serverId},</if>
-                <if test="port != null">#{port},</if>
-                <if test="version != null">#{version},</if>
                 <if test="techStack != null">#{techStack},</if>
                 <if test="repoUrl != null">#{repoUrl},</if>
-                <if test="status != null">#{status},</if>
         </trim>
     </insert>
 
@@ -105,23 +98,11 @@
             <if test="projectId != null">
                 project_id = #{projectId},
             </if>
-            <if test="serverId != null">
-                server_id = #{serverId},
-            </if>
-            <if test="port != null">
-                port = #{port},
-            </if>
-            <if test="version != null">
-                version = #{version},
-            </if>
             <if test="techStack != null">
                 tech_stack = #{techStack},
             </if>
             <if test="repoUrl != null">
                 repo_url = #{repoUrl},
-            </if>
-            <if test="status != null">
-                status = #{status},
             </if>
         </set>
         where id = #{id}

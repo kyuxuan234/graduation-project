@@ -189,6 +189,12 @@ export default {
         ],
         content: [
           {required: true, message: '请输入告警内容', trigger: 'blur'},
+        ],
+        appId: [
+          {validator: (rule, value, callback) => this.requireAsset(callback), trigger: 'change'},
+        ],
+        serverId: [
+          {validator: (rule, value, callback) => this.requireAsset(callback), trigger: 'change'},
         ]
       },
     }
@@ -257,11 +263,14 @@ export default {
         this.serverList = res.data || []
       })
     },
-    handleAppChange(appId) {   // 选择应用后默认带出该应用所在的服务器
-      const app = this.appList.find(v => v.id === appId)
-      if (app) {
-        this.form.serverId = app.serverId
+    requireAsset(callback) {
+      if (!this.form.appId && !this.form.serverId) {
+        callback(new Error('请选择应用或部署环境'))
+        return
       }
+      callback()
+    },
+    handleAppChange() {
     },
     handleAdd() {   // 登记告警
       this.formReadonly = false

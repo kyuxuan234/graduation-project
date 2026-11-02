@@ -9,14 +9,14 @@ public enum DeployStatusEnum {
     ACCEPTING,
     // 待运维审批
     PENDING,
-    // 已批准
+    // 待执行
     APPROVED,
     // 已驳回
     REJECTED,
-    // 部署中
+    // 发布中
     DEPLOYING,
-    // 成功
+    // 发布成功
     SUCCESS,
-    // 失败
+    // 发布失败
     FAILED,
 }

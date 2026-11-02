@@ -1,8 +1,10 @@
 package com.example.controller;
 
 import com.example.common.Result;
+import com.example.common.enums.RoleEnum;
 import com.example.entity.Project;
 import com.example.service.ProjectService;
+import com.example.utils.AuthUtils;
 import com.github.pagehelper.PageInfo;
 import org.springframework.web.bind.annotation.*;
 import javax.annotation.Resource;
@@ -23,6 +25,7 @@ public class ProjectController {
      */
     @PostMapping("/add")
     public Result<Void> add(@RequestBody Project project) {
+        AuthUtils.requireRole(RoleEnum.DEV);
         projectService.add(project);
         return Result.success();
     }
@@ -32,6 +35,7 @@ public class ProjectController {
      */
     @DeleteMapping("/delete/{id}")
     public Result<Void> deleteById(@PathVariable Integer id) {
+        AuthUtils.requireRole(RoleEnum.DEV);
         projectService.deleteById(id);
         return Result.success();
     }
@@ -41,6 +45,7 @@ public class ProjectController {
      */
     @DeleteMapping("/delete/batch")
     public Result<Void> deleteBatch(@RequestBody List<Integer> ids) {
+        AuthUtils.requireRole(RoleEnum.DEV);
         projectService.deleteBatch(ids);
         return Result.success();
     }
@@ -50,6 +55,7 @@ public class ProjectController {
      */
     @PutMapping("/update")
     public Result<Void> updateById(@RequestBody Project project) {
+        AuthUtils.requireRole(RoleEnum.DEV, RoleEnum.TL);
         projectService.updateById(project);
         return Result.success();
     }

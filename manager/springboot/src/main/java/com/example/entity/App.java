@@ -16,17 +16,11 @@ public class App implements Serializable {
     private String code;
     /** 所属项目id */
     private Integer projectId;
-    /** 部署服务器id */
-    private Integer serverId;
-    /** 端口 */
-    private Integer port;
-    /** 当前版本 */
-    private String version;
     /** 技术栈 */
     private String techStack;
     /** 代码仓库地址 */
     private String repoUrl;
-    /** 状态：ONLINE-在线 DEPLOYING-部署中 OFFLINE-离线 */
+    /** 状态：ONLINE-在线 DEPLOYING-部署中 OFFLINE-离线（兼容旧字段，实例状态以 app_instance 为准） */
     private String status;
     /** 创建时间 */
     private String createTime;
@@ -37,12 +31,16 @@ public class App implements Serializable {
 
     /** 联查字段：所属项目名 */
     private String projectName;
-    /** 联查字段：部署服务器主机名 */
-    private String serverName;
     /** 联查字段：部署服务器环境 */
     private String serverEnv;
     /** 联查字段：该应用的部署单数 */
     private Integer deployCount;
+    /** 仅用于生成脚本的请求字段，不入库 */
+    private String version;
+    /** 仅用于按实例所在服务器筛选 / 生成脚本，不入库 */
+    private Integer serverId;
+    /** 在线实例数 */
+    private Integer onlineCount;
     /** 联查字段：该应用的告警数 */
     private Integer alarmCount;
 
@@ -76,30 +74,6 @@ public class App implements Serializable {
 
     public void setProjectId(Integer projectId) {
         this.projectId = projectId;
-    }
-
-    public Integer getServerId() {
-        return serverId;
-    }
-
-    public void setServerId(Integer serverId) {
-        this.serverId = serverId;
-    }
-
-    public Integer getPort() {
-        return port;
-    }
-
-    public void setPort(Integer port) {
-        this.port = port;
-    }
-
-    public String getVersion() {
-        return version;
-    }
-
-    public void setVersion(String version) {
-        this.version = version;
     }
 
     public String getTechStack() {
@@ -158,14 +132,6 @@ public class App implements Serializable {
         this.projectName = projectName;
     }
 
-    public String getServerName() {
-        return serverName;
-    }
-
-    public void setServerName(String serverName) {
-        this.serverName = serverName;
-    }
-
     public String getServerEnv() {
         return serverEnv;
     }
@@ -180,6 +146,30 @@ public class App implements Serializable {
 
     public void setDeployCount(Integer deployCount) {
         this.deployCount = deployCount;
+    }
+
+    public String getVersion() {
+        return version;
+    }
+
+    public void setVersion(String version) {
+        this.version = version;
+    }
+
+    public Integer getServerId() {
+        return serverId;
+    }
+
+    public void setServerId(Integer serverId) {
+        this.serverId = serverId;
+    }
+
+    public Integer getOnlineCount() {
+        return onlineCount;
+    }
+
+    public void setOnlineCount(Integer onlineCount) {
+        this.onlineCount = onlineCount;
     }
 
     public Integer getAlarmCount() {

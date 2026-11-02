@@ -1,8 +1,11 @@
 server:
   port: 9090
 
-# 数据库配置
+# 数据库配置。默认激活 dev，本地探活关闭、凭据使用开发密钥。
+# 生产必须设置 SPRING_PROFILES_ACTIVE=prod，否则会落到开发配置。
 spring:
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:dev}
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
     username: root   #你本地的数据库用户名

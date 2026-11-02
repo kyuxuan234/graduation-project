@@ -6,11 +6,12 @@ import 'element-ui/lib/theme-chalk/index.css'
 import '@/assets/css/global.css'
 import '@/assets/css/theme/index.css'
 import request from "@/utils/request";
+import { apiBaseUrl } from "@/utils/apiBase";
 
 Vue.config.productionTip = false
 
 Vue.prototype.$request = request
-Vue.prototype.$baseUrl = process.env.VUE_APP_API_BASE_URL || '/api'
+Vue.prototype.$baseUrl = apiBaseUrl()
 
 Vue.use(ElementUI, {size: "small"})
 

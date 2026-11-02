@@ -1,10 +1,10 @@
 export const ROLE_NAMES = {
   ADMIN: '超级管理员',
-  DEV: '开发',
+  DEV: '开发人员',
   TL: '技术负责人',
-  QA: '测试',
+  QA: '测试人员',
   PM: '产品经理',
-  OPS: '运维',
+  OPS: '运维人员',
 }
 
 export const ROLE_TAG = {

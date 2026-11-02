@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.mapper.EnvironmentMapper">
+
+    <select id="selectAll" resultType="com.example.entity.Environment">
+        select e.id, e.code, e.name, e.sort_no, e.remark, e.create_time, e.update_time, e.deleted,
+               (select count(*) from server s where s.env = e.code and s.deleted = 0) as server_count,
+               (select count(*) from app_instance i where i.env_code = e.code and i.deleted = 0) as instance_count
+        from environment e
+        where e.deleted = 0
+        order by e.sort_no, e.id
+    </select>
+
+    <select id="selectByCode" resultType="com.example.entity.Environment">
+        select id, code, name, sort_no, remark, create_time, update_time, deleted
+        from environment
+        where code = #{code} and deleted = 0
+    </select>
+
+    <update id="updateById" parameterType="com.example.entity.Environment">
+        update environment
+        set name = #{name},
+            remark = #{remark}
+        where id = #{id} and deleted = 0
+    </update>
+</mapper>

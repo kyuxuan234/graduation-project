@@ -38,8 +38,8 @@
             <div class="sub">请选择角色并填写账号信息</div>
 
             <div class="roles">
-              <button type="button" class="role" :class="{ active: form.role === 'DEV' }" @click="form.role = 'DEV'">开发</button>
-              <button type="button" class="role" :class="{ active: form.role === 'OPS' }" @click="form.role = 'OPS'">运维</button>
+              <button type="button" class="role" :class="{ active: form.role === 'DEV' }" @click="form.role = 'DEV'">开发人员</button>
+              <button type="button" class="role" :class="{ active: form.role === 'OPS' }" @click="form.role = 'OPS'">运维人员</button>
             </div>
 
             <div class="field">

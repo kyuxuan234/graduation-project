@@ -1,13 +1,15 @@
 package com.example.controller;
 
 import cn.hutool.core.io.FileUtil;
-import cn.hutool.core.thread.ThreadUtil;
 import cn.hutool.core.util.StrUtil;
 import com.example.common.Result;
 import com.example.common.enums.ResultCodeEnum;
 import com.example.common.enums.RoleEnum;
 import com.example.exception.BusinessException;
 import com.example.utils.AuthUtils;
+import com.example.utils.FileSafeNames;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
@@ -25,6 +27,8 @@ import java.nio.file.Paths;
 @RequestMapping("/files")
 public class FileController {
 
+    private static final Logger log = LoggerFactory.getLogger(FileController.class);
+
     @Value("${file.upload-dir:files}")
     private String uploadDir;
 
@@ -39,26 +43,30 @@ public class FileController {
      */
     @PostMapping("/upload")
     public Result<String> upload(MultipartFile file) {
-        String flag;
-        synchronized (FileController.class) {
-            flag = System.currentTimeMillis() + "";
-            ThreadUtil.sleep(1L);
+        AuthUtils.requireLogin();
+        if (file == null || file.isEmpty()) {
+            throw new BusinessException(ResultCodeEnum.FILE_TYPE_ERROR);
         }
-        String fileName = safeOriginalName(file.getOriginalFilename());
+        if (file.getSize() > FileSafeNames.MAX_BYTES) {
+            throw new BusinessException(ResultCodeEnum.FILE_TYPE_ERROR.code, "文件不能超过 10MB");
+        }
+        String ext = FileSafeNames.resolveAllowedExt(file.getOriginalFilename());
+        byte[] bytes;
         try {
-            Path root = uploadRoot();
-            if (!FileUtil.isDirectory(root.toString())) {
-                FileUtil.mkdir(root.toString());
-            }
-            FileUtil.writeBytes(file.getBytes(), root.resolve(flag + "-" + fileName).toString());
-            System.out.println(fileName + "--上传成功");
-        } catch (BusinessException e) {
-            throw e;
+            bytes = file.getBytes();
         } catch (Exception e) {
-            System.err.println(fileName + "--文件上传失败");
+            throw new BusinessException(ResultCodeEnum.FILE_TYPE_ERROR);
         }
+        FileSafeNames.assertMagic(ext, bytes);
+        String stored = FileSafeNames.newStoredName(ext);
+        Path root = uploadRoot();
+        if (!FileUtil.isDirectory(root.toString())) {
+            FileUtil.mkdir(root.toString());
+        }
+        FileUtil.writeBytes(bytes, FileSafeNames.resolveInside(root, stored).toString());
+        log.info("文件上传成功 {}", stored);
         String http = "http://" + ip + ":" + port + "/files/";
-        return Result.success(http + flag + "-" + fileName);
+        return Result.success(http + stored);
     }
 
     /**
@@ -80,7 +88,7 @@ public class FileController {
         } catch (BusinessException e) {
             throw e;
         } catch (Exception e) {
-            System.out.println("文件下载失败");
+            log.warn("文件下载失败");
         }
     }
 
@@ -91,7 +99,7 @@ public class FileController {
     public void delFile(@PathVariable String flag) {
         AuthUtils.requireRole(ResultCodeEnum.NO_PERMISSION_ERROR, RoleEnum.ADMIN);
         FileUtil.del(fileInRoot(flag).toString());
-        System.out.println("删除文件" + flag + "成功");
+        log.info("删除文件 {} 成功", flag);
     }
 
     private Path uploadRoot() {
@@ -103,15 +111,6 @@ public class FileController {
             throw new BusinessException(ResultCodeEnum.FILE_NAME_INVALID_ERROR);
         }
         return uploadRoot().resolve(flag);
-    }
-
-    private static String safeOriginalName(String original) {
-        String fileName = StrUtil.blankToDefault(original, "file");
-        fileName = Paths.get(fileName).getFileName().toString();
-        if (fileName.indexOf('\0') >= 0 || fileName.contains("..") || fileName.contains("/") || fileName.contains("\\")) {
-            throw new BusinessException(ResultCodeEnum.FILE_NAME_INVALID_ERROR);
-        }
-        return fileName;
     }
 
     private static String contentType(String flag) {

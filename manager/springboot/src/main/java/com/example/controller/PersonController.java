@@ -58,6 +58,12 @@ public class PersonController {
         return Result.success(person);
     }
 
+    @GetMapping("/developers")
+    public Result<List<Person>> developers() {
+        AuthUtils.requireRole(RoleEnum.DEV, RoleEnum.TL);
+        return Result.success(personService.listActiveDevelopers());
+    }
+
     @GetMapping("/selectAll")
     public Result<List<Person>> selectAll(Person person) {
         AuthUtils.requireRole(RoleEnum.ADMIN);

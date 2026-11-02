@@ -58,3 +58,16 @@ ehthumbs.db
 manager/files/manager-final-scorecard*.md
 manager/files/manager-thesis-*.md
 manager/files/manager-defense-*.md
+
+# 论文正文、插图、生成脚本与审查稿：仅本地保留，不入库
+论文插图/
+毕业作业*.docx
+设备维修*.docx
+《*.docx
+_build_thesis.py
+_draw_seq_fig5.py
+_thesis_out.docx
+_rewrite_work/
+项目全面审查报告.md
+__pycache__/
+.lab-git/
